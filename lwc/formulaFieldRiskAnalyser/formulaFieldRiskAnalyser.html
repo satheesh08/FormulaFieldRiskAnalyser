@@ -1,0 +1,17 @@
+<template>
+  <lightning-card title="Formula CPU Risk Analyzer" icon-name="utility:formula">
+    <template if:true={isLoading}>
+      <div class="spinner-container">
+        <lightning-spinner alternative-text="Loading" size="medium" variant="brand"></lightning-spinner>
+      </div>
+    </template>
+    <template if:true={isDataAvailable}>
+      <lightning-datatable key-field="fieldName" data={rows} columns={columns} hide-checkbox-column class="custom-table" min-column-width="100"></lightning-datatable>
+    </template>
+    <template if:false={isLoading}>
+      <template if:false={isDataAvailable}>
+        <div class="slds-p-around_medium slds-text-color_weak"> No formula fields found or access denied. </div>
+      </template>
+    </template>
+  </lightning-card>
+</template>
