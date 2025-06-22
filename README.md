@@ -128,7 +128,9 @@ This tool surfaces those risks **before they become production incidents**.
    * Reads the current `objectApiName`
    * Uses Tooling API to retrieve all formula fields
    * Displays risk indicators for each field
-![image](https://github.com/user-attachments/assets/f8d6d1ff-9268-4582-b326-11e3e8241d84)
+
+![image](https://github.com/user-attachments/assets/dc288b08-2c8f-4143-b22b-25b1fc9fb1ed)
+
 
 ---
 
