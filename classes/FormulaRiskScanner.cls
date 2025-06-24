@@ -1,5 +1,49 @@
 public with sharing class FormulaRiskScanner {
-    
+
+    public class SObjectInfo implements Comparable {
+        @AuraEnabled public String label;
+        @AuraEnabled public String apiName;
+
+        public SObjectInfo(String label, String apiName) {
+            this.label = label;
+            this.apiName = apiName;
+        }
+
+        public Integer compareTo(Object other) {
+            SObjectInfo o = (SObjectInfo) other;
+            return this.label.toLowerCase().compareTo(o.label.toLowerCase());
+        }
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static List<SObjectInfo> getAllSObjectNames() {
+        List<SObjectInfo> results = new List<SObjectInfo>();
+        Map<String, Schema.SObjectType> globalDesc = Schema.getGlobalDescribe();
+
+        for (String apiName : globalDesc.keySet()) {
+            Schema.DescribeSObjectResult describe = globalDesc.get(apiName).getDescribe();
+
+            if (
+                describe.isQueryable() &&
+                !describe.isDeprecatedAndHidden() &&
+                !describe.getLabel().startsWithIgnoreCase('__MISSING LABEL__') &&
+                !describe.getName().startsWithIgnoreCase('FieldDefinition') &&
+                !describe.getName().startsWithIgnoreCase('EntityDefinition') &&
+                !describe.getName().startsWithIgnoreCase('Apex') &&
+                !describe.getName().startsWithIgnoreCase('Auth') &&
+                !describe.getName().startsWithIgnoreCase('Permission') &&
+                !describe.getName().contains('Feed') &&
+                !describe.getName().contains('Share') &&
+                !describe.getName().endsWith('__History')
+            ) {
+                results.add(new SObjectInfo(describe.getLabel(), apiName));
+            }
+        }
+
+        results.sort();
+        return results;
+    }
+
     public class FormulaInfo {
         @AuraEnabled public String objectName;
         @AuraEnabled public String fieldName;
@@ -10,8 +54,10 @@ public with sharing class FormulaRiskScanner {
         @AuraEnabled public Boolean usesRecordTypeOrUser;
         @AuraEnabled public Boolean isFormulaTooLong;
         @AuraEnabled public String returnType;
+        @AuraEnabled public Integer cpuScore;
+        @AuraEnabled public String cpuRedFlags;
 
-        public FormulaInfo(String o, String f, Integer d, Integer c, Integer h, String r, Boolean flag, Boolean tooLong, String rt) {
+        public FormulaInfo(String o, String f, Integer d, Integer c, Integer h, String r, Boolean flag, Boolean tooLong, String rt, Integer score, String redFlags) {
             objectName = o;
             fieldName = f;
             depth = d;
@@ -21,6 +67,8 @@ public with sharing class FormulaRiskScanner {
             usesRecordTypeOrUser = flag;
             isFormulaTooLong = tooLong;
             returnType = rt;
+            cpuScore = score;
+            cpuRedFlags = redFlags;
         }
     }
 
@@ -42,7 +90,7 @@ public with sharing class FormulaRiskScanner {
             for (String fieldName : formulaFieldNames) {
                 String query = 'SELECT Id, Metadata, DeveloperName FROM CustomField WHERE DeveloperName = \'' + fieldName + '\' AND TableEnumOrId = \'' + objectName + '\'';
                 String toolingEndpoint = 'callout:ToolingAPI/services/data/v59.0/tooling/query/?q=' + EncodingUtil.urlEncode(query, 'UTF-8');
-                
+
                 HttpRequest req = new HttpRequest();
                 req.setEndpoint(toolingEndpoint);
                 req.setMethod('GET');
@@ -52,24 +100,36 @@ public with sharing class FormulaRiskScanner {
                 if (res.getStatusCode() == 200) {
                     Map<String, Object> jsonResponse = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
                     List<Object> records = (List<Object>) jsonResponse.get('records');
-                    
+
                     if (!records.isEmpty()) {
                         Map<String, Object> rec = (Map<String, Object>) records[0];
                         Map<String, Object> metadata = (Map<String, Object>) rec.get('Metadata');
                         if (metadata != null && metadata.containsKey('formula')) {
                             String formula = (String) metadata.get('formula');
                             String returnType = (String) metadata.get('returnType');
-
                             Integer depth = countDotDepth(formula);
                             Integer crossObj = countMaxCrossObjectHops(formula);
                             Integer heavyFuncCount = countHeavyFunctions(formula);
                             Boolean usesSpecialFields = containsRecordTypeOrUser(formula);
                             Boolean isTooLong = formula.length() > 3000;
-                            String risk = calculateRisk(depth, crossObj, heavyFuncCount, isTooLong);
+                            Boolean unbalanced = hasUnbalancedParentheses(formula);
+                            String risk = calculateRisk(depth, crossObj, heavyFuncCount, isTooLong || unbalanced);
+
+                            // Red flags
+                            List<String> redFlags = new List<String>();
+                            if (isTooLong) redFlags.add('Formula > 3000 chars');
+                            if (usesSpecialFields) redFlags.add('Uses $User/$RecordType');
+                            if (unbalanced) redFlags.add('Unbalanced parentheses');
+                            if (heavyFuncCount > 0) redFlags.add('Heavy functions: ' + String.valueOf(heavyFuncCount));
+                            if (crossObj >= 3) redFlags.add('Deep cross-object hops');
+                            if (depth >= 6) redFlags.add('Excessive nesting');
+
+                            Integer score = depth * 2 + crossObj * 2 + heavyFuncCount * 3 + (isTooLong ? 5 : 0) + (unbalanced ? 5 : 0);
 
                             results.add(new FormulaInfo(
                                 objectName, fieldName, depth, crossObj, heavyFuncCount,
-                                risk, usesSpecialFields, isTooLong, returnType
+                                risk, usesSpecialFields, isTooLong, returnType, score,
+                                String.join(redFlags, '; ')
                             ));
                         }
                     }
@@ -99,7 +159,7 @@ public with sharing class FormulaRiskScanner {
         Integer maxDepth = 0;
         Integer currentDepth = 0;
         String cleaned = formula.replaceAll('\\s+', '');
-        
+
         for (Integer i = 0; i < cleaned.length(); ) {
             Boolean matched = false;
             for (String func : knownFunctions) {
@@ -107,7 +167,7 @@ public with sharing class FormulaRiskScanner {
                 if (i + len + 1 <= cleaned.length() &&
                     cleaned.substring(i, i + len).toUpperCase() == func &&
                     cleaned.substring(i + len, i + len + 1) == '(') {
-                        
+
                     currentDepth++;
                     if (currentDepth > maxDepth) maxDepth = currentDepth;
                     i += len + 1;
@@ -142,15 +202,18 @@ public with sharing class FormulaRiskScanner {
     }
 
     private static Integer countHeavyFunctions(String formula) {
-        Set<String> heavyFunctions = new Set<String>{
-            'ISCHANGED', 'PRIORVALUE', 'VLOOKUP', 'DISTANCE', 'GEOLOCATION'
-        };
-
+        Set<String> heavyFunctions = new Set<String>{ 'ISCHANGED', 'PRIORVALUE', 'VLOOKUP', 'DISTANCE', 'GEOLOCATION' };
         Integer count = 0;
+        String upperFormula = formula != null ? formula.toUpperCase() : '';
+
         for (String func : heavyFunctions) {
-            Pattern p = Pattern.compile('\\b' + func + '\\s*\\(');
-            Matcher m = p.matcher(formula.toUpperCase());
-            while (m.find()) count++;
+            try {
+                Pattern p = Pattern.compile('\\b' + func + '\\s*\\(');
+                Matcher m = p.matcher(upperFormula);
+                while (m.find()) count++;
+            } catch (Exception ex) {
+                System.debug('Regex error on func=' + func + ', formula=' + formula + ': ' + ex.getMessage());
+            }
         }
         return count;
     }
@@ -158,6 +221,17 @@ public with sharing class FormulaRiskScanner {
     private static Boolean containsRecordTypeOrUser(String formula) {
         String upperFormula = formula.toUpperCase();
         return upperFormula.contains('$RECORDTYPE') || upperFormula.contains('$USER');
+    }
+
+    private static Boolean hasUnbalancedParentheses(String formula) {
+        Integer balance = 0;
+        for (Integer i = 0; i < formula.length(); i++) {
+            String ch = formula.substring(i, i + 1);
+            if (ch == '(') balance++;
+            else if (ch == ')') balance--;
+            if (balance < 0) return true;
+        }
+        return balance != 0;
     }
 
     private static String calculateRisk(Integer depth, Integer crossObj, Integer heavyFuncCount, Boolean tooLong) {
