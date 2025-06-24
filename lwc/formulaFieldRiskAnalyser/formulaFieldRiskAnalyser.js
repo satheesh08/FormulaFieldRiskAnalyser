@@ -1,8 +1,9 @@
 import {
     LightningElement,
-    api
+    track
 } from 'lwc';
 import getFormulaFields from '@salesforce/apex/FormulaRiskScanner.getFormulaFields';
+import getAllSObjectNames from '@salesforce/apex/FormulaRiskScanner.getAllSObjectNames';
 
 const COLS = [{
         label: 'Object',
@@ -18,12 +19,17 @@ const COLS = [{
         type: 'text'
     },
     {
-        label: 'Object Hops',
+        label: 'Hops',
         fieldName: 'crossObjectHops',
         type: 'text'
     },
     {
-        label: 'CPU Risk Level',
+        label: 'Heavy Functions',
+        fieldName: 'heavyFunctionCount',
+        type: 'text'
+    },
+    {
+        label: 'Risk Level',
         fieldName: 'riskLevel',
         cellAttributes: {
             class: {
@@ -34,39 +40,87 @@ const COLS = [{
             },
             iconPosition: 'left'
         }
+    },
+    {
+        label: 'Score',
+        fieldName: 'cpuScore',
+        type: 'number'
+    },
+    {
+        label: 'Red Flags',
+        fieldName: 'cpuRedFlags',
+        type: 'text',
+        wrapText: true,
+        cellAttributes: {
+            title: {
+                fieldName: 'cpuRedFlags'
+            }
+        }
+    },
+    {
+        label: 'Uses $User/$RecordType',
+        fieldName: 'usesRecordTypeOrUser',
+        type: 'text'
+    },
+    {
+        label: 'Formula Too Long',
+        fieldName: 'isFormulaTooLong',
+        type: 'text'
     }
 ];
 
 
 export default class FormulaRiskAnalyzer extends LightningElement {
-    rows = [];
-    isDataAvailable = false;
-    isLoading = true;
-    @api objectApiName;
+    @track objectOptions = [];
+    @track selectedObject = '';
+    @track rows = [];
+    @track isDataAvailable = false;
+    @track isLoading = false;
     columns = COLS;
 
     connectedCallback() {
+        this.fetchSObjectOptions();
+    }
+
+    async fetchSObjectOptions() {
+        this.isLoading = true;
+        try {
+            const data = await getAllSObjectNames();
+            this.objectOptions = data.map(obj => ({
+                label: obj.label,
+                value: obj.apiName
+            }));
+        } catch (error) {
+            console.error('Error fetching object names:', error);
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    handleObjectChange(event) {
+        this.selectedObject = event.detail.value;
         this.loadFormulaFields();
     }
 
     async loadFormulaFields() {
         this.isLoading = true;
+        this.isDataAvailable = false;
+        this.rows = [];
+
         try {
             const data = await getFormulaFields({
-                objectName: this.objectApiName
+                objectName: this.selectedObject
             });
             this.rows = data.map(row => ({
                 ...row,
                 riskLevelClass: this.getRiskClass(row.riskLevel),
                 riskLevelIcon: this.getRiskIcon(row.riskLevel)
             }));
+            console.log(JSON.stringify(this.rows[0]));
 
-            this.isDataAvailable = true;
-            console.log('Data:', data);
-            console.dir(this.rows);
+            this.isDataAvailable = this.rows.length > 0;
         } catch (error) {
-            console.error('Error fetching formula fields:', error);
-            this.isDataAvailable = false;
+            console.error('Error loading formula fields:', error);
         } finally {
             this.isLoading = false;
         }
