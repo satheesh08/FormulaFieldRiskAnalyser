@@ -1,16 +1,43 @@
 <template>
   <lightning-card title="Formula CPU Risk Analyzer" icon-name="utility:formula">
+    <div class="slds-p-around_medium slds-grid slds-grid_vertical-align-center slds-grid_align-spread">
+      <lightning-combobox name="objectSelector" label="Select Object" placeholder="Choose an object" options={objectOptions} value={selectedObject} onchange={handleObjectChange} class="slds-size_medium"></lightning-combobox>
+    </div>
     <template if:true={isLoading}>
-      <div class="spinner-container">
-        <lightning-spinner alternative-text="Loading" size="medium" variant="brand"></lightning-spinner>
+      <div class="spinner-container slds-p-around_medium slds-align_absolute-center slds-text-align_center">
+        <lightning-spinner alternative-text="Loading..." size="medium" variant="brand"></lightning-spinner>
+        <p class="slds-m-top_small slds-text-heading_small">🔍 Give us a moment… We're sniffing the object!</p>
       </div>
     </template>
     <template if:true={isDataAvailable}>
-      <lightning-datatable key-field="fieldName" data={rows} columns={columns} hide-checkbox-column class="custom-table" min-column-width="100"></lightning-datatable>
+      <div class="slds-scrollable_x">
+        <lightning-datatable key-field="fieldName" data={rows} columns={columns} hide-checkbox-column class="custom-table" min-column-width="100"></lightning-datatable>
+      </div>
+      <div class="slds-box slds-theme_shade slds-m-top_medium slds-text-body_small">
+        <p class="slds-text-title_bold slds-m-bottom_x-small">CPU Score Legend</p>
+        <ul class="slds-list_dotted slds-p-left_medium">
+          <li>
+            <strong>+2</strong> for each level of <strong>nesting</strong> (depth)
+          </li>
+          <li>
+            <strong>+2</strong> for each <strong>cross-object hop</strong>
+          </li>
+          <li>
+            <strong>+3</strong> for each <strong>heavy function</strong> (e.g., <code>ISCHANGED</code>, <code>VLOOKUP</code>)
+          </li>
+          <li>
+            <strong>+5</strong> if the formula is <strong>too long</strong> (&gt;3000 chars)
+          </li>
+          <li>
+            <strong>+5</strong> if the formula is <strong>unbalanced</strong> (parentheses)
+          </li>
+        </ul>
+        <p class="slds-m-top_small">Use this score to assess potential CPU risk based on formula structure.</p>
+      </div>
     </template>
     <template if:false={isLoading}>
       <template if:false={isDataAvailable}>
-        <div class="slds-p-around_medium slds-text-color_weak"> No formula fields found or access denied. </div>
+        <div class="slds-p-around_medium slds-text-color_weak slds-align_absolute-center"> No formula fields found or access denied. </div>
       </template>
     </template>
   </lightning-card>
