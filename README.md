@@ -2,21 +2,54 @@
 
 This Salesforce Lightning Web Component (LWC) helps developers and admins proactively detect **complex formula fields** that may risk hitting **Apex CPU time limits**. It analyzes all formula fields on a specific object and calculates their:
 
-* 🧬 **Nesting depth**
-* 🔗 **Cross-object hops**
-* 🔥 **CPU risk level** (High / Medium / Low)
+
+| 🔍 Metric                         | 🧠 Meaning                                                                                                              |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 🧬 **Nesting depth**              | How deep the formula nesting is (e.g., nested `IF`, `AND`, `OR` logic). Deep nesting can hit CPU limits.                |
+| 🔗 **Cross-object hops**          | How many relationships the formula travels across (`Account.Owner.Profile.Name` = 2 hops). More hops = more CPU.        |
+| 🧠 **Heavy function count**       | Count of expensive functions like `ISCHANGED`, `PRIORVALUE`, `VLOOKUP`, `GEOLOCATION`, `DISTANCE`. These are CPU-heavy. |
+| 🔥 **CPU risk level**             | Based on depth, hops, heavy functions, length, and unbalanced parentheses. (High / Medium / Low).                       |
+| 💣 **Formula too long**           | Boolean flag if formula exceeds 3000 characters. Can impact performance.                                                |
+| 🧍 **Uses \$User / \$RecordType** | Checks if formula references current user or record type — often used in dynamic formulas.                              |
+| 📈 **CPU Score**                  | A numerical score derived from multiple factors to quantify complexity/risk.                                            |
+| 🚩 **Red Flags**                  | Text field highlighting specific issues found, e.g., “Excessive nesting”, “Unbalanced parentheses”, etc.                |
 
 It uses the **Tooling API** securely via a **Named Credential**, removing the need for manual token management.
 
 ---
 
 ## 💼 Why It Matters
+Salesforce formulas can silently contribute to performance bottlenecks, especially when:
 
-Salesforce formulas can silently contribute to **performance issues**, especially when:
+🧬 Nesting gets deep
+Deeply nested IF, AND, or CASE statements increase evaluation complexity.
 
-* Nesting gets deep
-* Cross-object references are chained
-* Multiple formulas are evaluated in record-triggered flows or batch jobs
+🔗 Cross-object references are chained
+Referencing multiple parent objects (e.g., Opportunity.Account.Owner.Profile.Name) increases data traversal and CPU usage.
+
+🔁 Used in multiple automations
+When the same formula field is used in multiple Flows, validation rules, or process builders, it's recalculated multiple times.
+
+🧠 Contain heavy functions
+Expensive functions like VLOOKUP, ISCHANGED, PRIORVALUE, DISTANCE, GEOLOCATION can cause spikes in CPU time.
+
+🕵️ Used in record-triggered Flows or Apex
+When formulas are accessed via triggers or flows, Salesforce recalculates them, impacting total transaction time.
+
+🧮 Used in List Views or Reports
+Formula fields on frequently-used list views or report filters slow down loading and query times.
+
+🧱 Include hardcoded logic or IDs
+Makes formulas brittle and harder to maintain, often leading to downstream logic errors or misfires.
+
+🔁 Have repeated expressions
+Repeating the same logic multiple times within a formula increases processing cost unnecessarily.
+
+📅 Use date/time logic excessively
+Functions like NOW(), TODAY(), DATEVALUE() can recalculate on every view/load, increasing overhead.
+
+🧾 Evaluated on large data volumes
+In batch Apex or mass updates (e.g., data loads), formula fields contribute to CPU usage per record.
 
 This tool surfaces those risks **before they become production incidents**.
 
@@ -26,7 +59,6 @@ This tool surfaces those risks **before they become production incidents**.
 
 * Secure Tooling API access via **Named Credential**
 * Lightweight LWC with **dynamic badge indicators**
-* Designed for **record pages only** (auto-resolves `objectApiName`)
 * Easily extensible
 
 ---
@@ -120,27 +152,17 @@ This tool surfaces those risks **before they become production incidents**.
 
 ## 🖥️ Usage
 
-1. Navigate to a **record page** (e.g., Account).
-2. In **Lightning App Builder**, drag the `FormulaFieldRiskAnalyser` component onto the layout.
-3. Activate the page.
-4. On load, the component:
+1. Navigate to App(FormulaSniffR) Open the App Page (FormulaSniffR).
+2. On load, the component:
 
-   * Reads the current `objectApiName`
-   * Uses Tooling API to retrieve all formula fields
+   * Reads the `objectApiName` from the user.
+   * Uses Tooling API to retrieve all formula fields for the selected object.
    * Displays risk indicators for each field
 
-![image](https://github.com/user-attachments/assets/dc288b08-2c8f-4143-b22b-25b1fc9fb1ed)
-
-
----
-
-## 📌 Known Limitations
-
-* Works only on **record pages**.
-* Requires **Tooling API** access and permissions.
-* OAuth must be re-authenticated if access token expires (handled by refresh\_token scope).
-
----
+![image](https://github.com/user-attachments/assets/db0d893a-cded-4bc0-a932-e9c1e713616e)
+![image](https://github.com/user-attachments/assets/df7aeef2-ae64-452a-99a1-93fe19ed9327)
+![image](https://github.com/user-attachments/assets/26ad1c69-d5c3-4f41-bb6e-f6b35e935912)
+![image](https://github.com/user-attachments/assets/4e257543-6c95-43bf-9f9e-966590cc1e80)
 
 ## 📅 Salesforce Compatibility
 
@@ -150,14 +172,5 @@ This tool surfaces those risks **before they become production incidents**.
 ---
 
 ## 🔐 Security
-
 * No secrets (tokens or keys) are stored in this repo.
-* Be sure to `.gitignore` any sensitive files:
-
-  ```bash
-  *.pem
-  *.key
-  .env
-  ```
-
 ---
