@@ -13,26 +13,74 @@
       <div class="slds-scrollable_x">
         <lightning-datatable key-field="fieldName" data={rows} columns={columns} hide-checkbox-column class="custom-table" min-column-width="100"></lightning-datatable>
       </div>
-      <div class="slds-box slds-theme_shade slds-m-top_medium slds-text-body_small">
-        <p class="slds-text-title_bold slds-m-bottom_x-small">CPU Score Legend</p>
-        <ul class="slds-list_dotted slds-p-left_medium">
-          <li>
-            <strong>+2</strong> for each level of <strong>nesting</strong> (depth)
-          </li>
-          <li>
-            <strong>+2</strong> for each <strong>cross-object hop</strong>
-          </li>
-          <li>
-            <strong>+3</strong> for each <strong>heavy function</strong> (e.g., <code>ISCHANGED</code>, <code>VLOOKUP</code>)
-          </li>
-          <li>
-            <strong>+5</strong> if the formula is <strong>too long</strong> (&gt;3000 chars)
-          </li>
-          <li>
-            <strong>+5</strong> if the formula is <strong>unbalanced</strong> (parentheses)
-          </li>
-        </ul>
-        <p class="slds-m-top_small">Use this score to assess potential CPU risk based on formula structure.</p>
+      <div class="slds-grid slds-wrap slds-m-top_medium">
+        <div class="slds-col slds-size_1-of-2 slds-p-right_small">
+          <div class="slds-box slds-theme_shade">
+            <p class="slds-text-title_bold slds-m-bottom_small">CPU Score Legend</p>
+            <ul class="slds-list_dotted slds-p-left_medium slds-text-body_regular">
+              <li>
+                <strong>+2</strong> for each level of <strong>nesting</strong> (depth)
+              </li>
+              <li>
+                <strong>+2</strong> for each <strong>cross-object hop</strong>
+              </li>
+              <li>
+                <strong>+3</strong> for each <strong>heavy function</strong>
+                <br />
+                <small>(e.g., <code>ISCHANGED</code>, <code>VLOOKUP</code>) </small>
+              </li>
+              <li>
+                <strong>+5</strong> if the formula is <strong>too long</strong>
+                <br />
+                <small>(&gt;3000 characters)</small>
+              </li>
+              <li>
+                <strong>+5</strong> if the formula is <strong>unbalanced</strong>
+                <br />
+                <small>(parentheses)</small>
+              </li>
+            </ul>
+            <p class="slds-m-top_small slds-text-color_weak"> Use this score to assess potential CPU risk based on formula structure. </p>
+          </div>
+        </div>
+        <div class="slds-col slds-size_1-of-2 slds-p-left_small">
+          <div class="slds-box slds-theme_default">
+            <p class="slds-text-title_bold slds-m-bottom_small">Formula Optimization</p>
+            <template if:true={formulaComparisonList}>
+              <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_fixed-layout">
+                <thead>
+                  <tr class="slds-line-height_reset">
+                    <th scope="col">
+                      <div class="slds-truncate" title="Original Formula">Original</div>
+                    </th>
+                    <th scope="col">
+                      <div class="slds-truncate" title="Optimized Formula">Optimized</div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template for:each={formulaComparisonList} for:item="record">
+                    <tr key={record.originalFormula}>
+                      <td>
+                        <div class="slds-truncate" title={record.originalFormula}>
+                          <code>{record.originalFormula}</code>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="slds-truncate" title={record.optimizedFormula}>
+                          <code>{record.optimizedFormula}</code>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </template>
+            <template if:false={formulaComparisonList}>
+              <p class="slds-text-color_weak">No optimized formulas found.</p>
+            </template>
+          </div>
+        </div>
       </div>
     </template>
     <template if:false={isLoading}>
