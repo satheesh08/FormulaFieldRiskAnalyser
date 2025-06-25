@@ -73,6 +73,7 @@ const COLS = [{
 export default class FormulaRiskAnalyzer extends LightningElement {
     @track objectOptions = [];
     @track selectedObject = '';
+    @track formulaComparisonList = [];
     @track rows = [];
     @track isDataAvailable = false;
     @track isLoading = false;
@@ -116,8 +117,12 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                 riskLevelClass: this.getRiskClass(row.riskLevel),
                 riskLevelIcon: this.getRiskIcon(row.riskLevel)
             }));
-            console.log(JSON.stringify(this.rows[0]));
-
+            this.formulaComparisonList = data
+                .filter(row => row.originalFormula && row.optimizedFormula)
+                .map(row => ({
+                    originalFormula: row.originalFormula,
+                    optimizedFormula: row.optimizedFormula
+                }));
             this.isDataAvailable = this.rows.length > 0;
         } catch (error) {
             console.error('Error loading formula fields:', error);
@@ -151,4 +156,5 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                 return '';
         }
     }
+
 }
