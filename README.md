@@ -1,6 +1,13 @@
 ## 🧠 Formula CPU Risk Analyzer for Salesforce
 
-This Salesforce Lightning Web Component (LWC) helps developers and admins proactively detect **complex formula fields** that may risk hitting **Apex CPU time limits**. It analyzes all formula fields on a specific object and calculates their:
+I’m here to talk about a quiet, yet growing challenge in every mature Salesforce org — formula fields.
+
+Over time, these fields become deeply nested, reference multiple objects, and use expensive functions like ISCHANGED, VLOOKUP, and PRIORVALUE. While powerful,
+they often hide in plain sight — until they cause Apex CPU timeouts, flow failures, or performance lags across the platform.
+
+As orgs scale, it becomes harder to track which formulas introduce risk — especially when logic is split across flows, triggers, and declarative tools.
+
+That’s where This Salesforce Lightning Web Component (LWC) helps developers and admins proactively detect **complex formula fields** that may risk hitting **Apex CPU time limits**. It analyzes all formula fields on a specific object and calculates their:
 
 
 | 🔍 Metric                         | 🧠 Meaning                                                                                                              |
@@ -51,7 +58,8 @@ Functions like NOW(), TODAY(), DATEVALUE() can recalculate on every view/load, i
 🧾 Evaluated on large data volumes
 In batch Apex or mass updates (e.g., data loads), formula fields contribute to CPU usage per record.
 
-This tool surfaces those risks **before they become production incidents**.
+In short, complex formulas don’t just live in one place — they echo across your org, and without visibility, they quietly accumulate as technical debt
+this tool helps surface these risks — and now, thanks to AI, even helps you solve them.
 
 ---
 
