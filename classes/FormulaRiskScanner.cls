@@ -56,10 +56,11 @@ public with sharing class FormulaRiskScanner {
         @AuraEnabled public Boolean usesRecordTypeOrUser;
         @AuraEnabled public Boolean isFormulaTooLong;
         @AuraEnabled public String returnType;
+        @AuraEnabled public String label;
         @AuraEnabled public Integer cpuScore;
         @AuraEnabled public String cpuRedFlags;
         
-        public FormulaInfo(String o, String f, Integer d, Integer c, Integer h, String r, Boolean flag, Boolean tooLong, String rt, Integer score, String redFlags,String ogFx, String optFx) {
+        public FormulaInfo(String o, String f, Integer d, Integer c, Integer h, String r, Boolean flag, Boolean tooLong, String rt,String lb, Integer score, String redFlags,String ogFx, String optFx) {
             objectName = o;
             fieldName = f;
             depth = d;
@@ -69,6 +70,7 @@ public with sharing class FormulaRiskScanner {
             usesRecordTypeOrUser = flag;
             isFormulaTooLong = tooLong;
             returnType = rt;
+            label = lb;
             cpuScore = score;
             cpuRedFlags = redFlags;
             originalFormula=ogFx;
@@ -81,6 +83,7 @@ public with sharing class FormulaRiskScanner {
         List<FormulaInfo> results = new List<FormulaInfo>();
         try {
             Set<String> formulaFieldNames = new Set<String>();
+            Map<String,String> formulaMap = new Map<String,String>();
             for (FieldDefinition fd : [
                 SELECT QualifiedApiName, EntityDefinition.QualifiedApiName, DeveloperName
                 FROM FieldDefinition 
@@ -88,11 +91,34 @@ public with sharing class FormulaRiskScanner {
                 AND DataType LIKE 'Formula%'
             ]) {
                 formulaFieldNames.add(fd.DeveloperName);
+                formulaMap.put(fd.DeveloperName,fd.QualifiedApiName);
             }
+            
+            String objectQuery = 'SELECT Id FROM CustomObject WHERE DeveloperName = \'' + objectName.replace('__c', '') + '\'';
+            String objectEndpoint = 'callout:ToolingAPI/services/data/v59.0/tooling/query/?q=' + EncodingUtil.urlEncode(objectQuery, 'UTF-8');
+            
+            HttpRequest objectReq = new HttpRequest();
+            objectReq.setEndpoint(objectEndpoint);
+            objectReq.setMethod('GET');
+            objectReq.setHeader('Content-Type', 'application/json');
+            
+            Http http2 = new Http();
+            HttpResponse objectRes = http2.send(objectReq);
+            
+            Map<String, Object> objectJson = (Map<String, Object>) JSON.deserializeUntyped(objectRes.getBody());
+            List<Object> objectRecords = (List<Object>) objectJson.get('records');
+            
+            if (objectRecords == null || objectRecords.isEmpty()) {
+                System.debug('CustomObject not found for: ' + objectName);
+                return null;
+            }
+            
+            Map<String, Object> objectRecord = (Map<String, Object>) objectRecords[0];
+            String customObjectId = (String) objectRecord.get('Id');
             
             Http http = new Http();
             for (String fieldName : formulaFieldNames) {
-                String query = 'SELECT Id, Metadata, DeveloperName FROM CustomField WHERE DeveloperName = \'' + fieldName + '\' AND TableEnumOrId = \'' + objectName + '\'';
+                String query = 'SELECT Id, Metadata, DeveloperName FROM CustomField WHERE DeveloperName = \'' + fieldName + '\' AND TableEnumOrId = \'' + customObjectId + '\'';
                 String toolingEndpoint = 'callout:ToolingAPI/services/data/v59.0/tooling/query/?q=' + EncodingUtil.urlEncode(query, 'UTF-8');
                 
                 HttpRequest req = new HttpRequest();
@@ -104,14 +130,14 @@ public with sharing class FormulaRiskScanner {
                 if (res.getStatusCode() == 200) {
                     Map<String, Object> jsonResponse = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
                     List<Object> records = (List<Object>) jsonResponse.get('records');
-                    
                     if (!records.isEmpty()) {
                         Map<String, Object> rec = (Map<String, Object>) records[0];
                         Map<String, Object> metadata = (Map<String, Object>) rec.get('Metadata');
                         if (metadata != null && metadata.containsKey('formula')) {
                             String formula = (String) metadata.get('formula');
                             String optimizedFormulaString=optimizeFormula(formula);
-                            String returnType = (String) metadata.get('returnType');
+                            String returnType = (String) metadata.get('type');
+                            String label = (String) metadata.get('label');
                             Integer depth = countDotDepth(formula);
                             Integer crossObj = countMaxCrossObjectHops(formula);
                             Integer heavyFuncCount = countHeavyFunctions(formula);
@@ -137,10 +163,10 @@ public with sharing class FormulaRiskScanner {
                             if (formula != null && optimizedFormulaString != null && formula.trim() == optimizedFormulaString.trim()) {
                                 finalOptimizedFormula = null; 
                             }
-                            
+                            String devname=formulaMap.get(fieldName);
                             results.add(new FormulaInfo(
-                                objectName, fieldName, depth, crossObj, heavyFuncCount,
-                                risk, usesSpecialFields, isTooLong, returnType, score,
+                                objectName, devname, depth, crossObj, heavyFuncCount,
+                                risk, usesSpecialFields, isTooLong, returnType,label, score,
                                 String.join(redFlags, '; '),
                                 finalFormula,
                                 finalOptimizedFormula
@@ -258,14 +284,14 @@ public with sharing class FormulaRiskScanner {
     @AuraEnabled(cacheable=true)
     public static String optimizeFormula(String formula) {
         String endpoint = 'https://api.openai.com/v1/chat/completions';
-        String GPT_API_KEY = '';  // Add your API key here
+        String GPT_API_KEY = ''; // Add Your Keys Here
         HttpRequest req = new HttpRequest();
         req.setEndpoint(endpoint);
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
         req.setHeader('Authorization', 'Bearer ' + GPT_API_KEY);
         
-        String prompt = 'You are a Salesforce formula field optimizer. Your task is to simplify or optimize formulas while strictly preserving their original logic and behavior. Do not change the meaning or intent of the formula. Do not replace record-based values (e.g., CreatedBy.Name) with session-based variables (e.g., $User.Name), and vice versa. Maintain cross-object relationships, user-based logic, and field references as-is unless you are simply improving readability or reducing unnecessary nesting or duplication. Return only the optimized formula as a plain text string without any explanation or formatting. If the formula cannot be optimized without altering its meaning, return the original formula as-is.';
+        String prompt = 'You are a Salesforce formula field optimizer. Your goal is to simplify and optimize Salesforce formulas only if it can be done safely, without changing their logic, behavior, or output. Follow these strict rules: 1. Maintain the original meaning, logic, and output of the formula. 2. Follow Salesforce formula syntax strictly. Ensure that all formulas you return are valid and compile without syntax errors. 3. Always include required literals like 0 or "" when they serve as fallback or default values. 4. Preserve all data types (e.g., Number, Text, Boolean) and ensure all functions and operators are used correctly per Salesforce formula syntax. 5. Retain cross-object references, field references, and session variables (e.g., CreatedBy.Name, $User.Name) exactly as-is. 6. Do not alter any IF, CASE, ISBLANK, ISNUMBER, TEXT, or logical structures unless it results in a logically equivalent and safer simplification. 7. Maintain proper use of parentheses to ensure logical grouping and operator precedence. 8. Do not introduce or remove any fields, variables, functions, or logic not present in the original formula. 9. If the formula cannot be safely optimized without changing meaning or risking syntax errors, return the original formula as-is. Return only the optimized formula as a plain text string with no explanation, no markdown, and no formatting.';
         
         String requestBody = System.JSON.serialize(new Map<String, Object>{
             'model' => 'gpt-4o-mini',
@@ -293,6 +319,37 @@ public with sharing class FormulaRiskScanner {
             return optimizedFormula;
         } else {
             return 'Error optimizing formula: ' + res.getBody();
+        }
+    }
+    
+    @AuraEnabled
+    public static Boolean updateFormula(String objectName, String fieldName, String newFormula,String type,String label) {
+        mdt_updation.MetadataPort service = new mdt_updation.MetadataPort();
+        service.SessionHeader = new mdt_updation.SessionHeader_element();
+        service.SessionHeader.sessionId = UtilsGetSessionId.getSessionIdFromVFPage();
+        
+        mdt_updation.CustomField formulaField = new mdt_updation.CustomField();
+        formulaField.fullName = objectName + '.' + fieldName;
+        formulaField.formula = newFormula;
+        formulaField.type_x = type; 
+        formulaField.label = label; 
+        
+        mdt_updation.SaveResult[] results = 
+            service.updateMetadata(new mdt_updation.Metadata[] { formulaField });
+        
+        if (results != null && results.size() > 0) {
+            if (results[0].success) {
+                System.debug('Formula field updated successfully.');
+                return true;
+            } else {
+                for (mdt_updation.Error error : results[0].errors) {
+                    System.debug('Error: ' + error.message);
+                }
+                return false;
+            }
+        } else {
+            System.debug('No results returned from updateMetadata call.');
+            return false;
         }
     }
     
