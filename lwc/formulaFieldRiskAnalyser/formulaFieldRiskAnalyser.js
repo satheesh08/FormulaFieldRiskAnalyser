@@ -4,6 +4,10 @@ import {
 } from 'lwc';
 import getFormulaFields from '@salesforce/apex/FormulaRiskScanner.getFormulaFields';
 import getAllSObjectNames from '@salesforce/apex/FormulaRiskScanner.getAllSObjectNames';
+import updateFormula from '@salesforce/apex/FormulaRiskScanner.updateFormula';
+import {
+    ShowToastEvent
+} from 'lightning/platformShowToastEvent';
 
 const COLS = [{
         label: 'Object',
@@ -21,6 +25,11 @@ const COLS = [{
     {
         label: 'Hops',
         fieldName: 'crossObjectHops',
+        type: 'text'
+    },
+    {
+        label: 'Return Type',
+        fieldName: 'returnType',
         type: 'text'
     },
     {
@@ -70,7 +79,7 @@ const COLS = [{
 ];
 
 
-export default class FormulaFieldRiskAnalyser extends LightningElement {
+export default class FormulaRiskAnalyzer extends LightningElement {
     @track objectOptions = [];
     @track selectedObject = '';
     @track formulaComparisonList = [];
@@ -117,12 +126,20 @@ export default class FormulaFieldRiskAnalyser extends LightningElement {
                 riskLevelClass: this.getRiskClass(row.riskLevel),
                 riskLevelIcon: this.getRiskIcon(row.riskLevel)
             }));
+            console.log(JSON.stringify(this.rows[0]));
+
             this.formulaComparisonList = data
                 .filter(row => row.originalFormula && row.optimizedFormula)
-                .map(row => ({
+                .map((row, index) => ({
+                    index,
                     originalFormula: row.originalFormula,
-                    optimizedFormula: row.optimizedFormula
+                    optimizedFormula: row.optimizedFormula,
+                    devname: row.fieldName,
+                    type: row.returnType,
+                    label: row.label
                 }));
+            console.log(JSON.stringify(this.formulaComparisonList[0]));
+
             this.isDataAvailable = this.rows.length > 0;
         } catch (error) {
             console.error('Error loading formula fields:', error);
@@ -156,5 +173,38 @@ export default class FormulaFieldRiskAnalyser extends LightningElement {
                 return '';
         }
     }
+
+    handleUseOptimized(event) {
+        const index = event.currentTarget.dataset.index;
+        const selected = this.formulaComparisonList[index];
+
+        if (selected && selected.optimizedFormula) {
+            updateFormula({
+                    objectName: this.selectedObject,
+                    fieldName: selected.devname,
+                    newFormula: selected.optimizedFormula,
+                    type: selected.type,
+                    label: selected.label,
+                })
+                .then(() => {
+                    this.dispatchEvent(new ShowToastEvent({
+                        title: 'Success',
+                        message: 'Formula updated successfully!',
+                        variant: 'success'
+                    }));
+                    const intIndex = Number(index);
+
+                    this.formulaComparisonList = this.formulaComparisonList
+                        .filter((_, i) => i !== intIndex)
+                        .map((item, idx) => ({
+                            ...item,
+                            index: idx
+                        }));
+
+                })
+
+        }
+    }
+
 
 }
