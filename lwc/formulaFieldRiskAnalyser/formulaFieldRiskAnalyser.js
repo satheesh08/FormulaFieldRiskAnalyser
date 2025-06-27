@@ -70,7 +70,7 @@ const COLS = [{
 ];
 
 
-export default class FormulaRiskAnalyzer extends LightningElement {
+export default class FormulaFieldRiskAnalyzer extends LightningElement {
     @track objectOptions = [];
     @track selectedObject = '';
     @track formulaComparisonList = [];
