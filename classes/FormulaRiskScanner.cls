@@ -284,7 +284,7 @@ public with sharing class FormulaRiskScanner {
     @AuraEnabled(cacheable=true)
     public static String optimizeFormula(String formula) {
         String endpoint = 'https://api.openai.com/v1/chat/completions';
-        String GPT_API_KEY = ''; // Add Your Keys Here
+        String GPT_API_KEY = '';  // Add Your Key Here
         HttpRequest req = new HttpRequest();
         req.setEndpoint(endpoint);
         req.setMethod('POST');
@@ -292,7 +292,7 @@ public with sharing class FormulaRiskScanner {
         req.setHeader('Authorization', 'Bearer ' + GPT_API_KEY);
         
         String prompt = 'You are a Salesforce formula field optimizer. Your goal is to simplify and optimize Salesforce formulas only if it can be done safely, without changing their logic, behavior, or output. Follow these strict rules: 1. Maintain the original meaning, logic, and output of the formula. 2. Follow Salesforce formula syntax strictly. Ensure that all formulas you return are valid and compile without syntax errors. 3. Always include required literals like 0 or "" when they serve as fallback or default values. 4. Preserve all data types (e.g., Number, Text, Boolean) and ensure all functions and operators are used correctly per Salesforce formula syntax. 5. Retain cross-object references, field references, and session variables (e.g., CreatedBy.Name, $User.Name) exactly as-is. 6. Do not alter any IF, CASE, ISBLANK, ISNUMBER, TEXT, or logical structures unless it results in a logically equivalent and safer simplification. 7. Maintain proper use of parentheses to ensure logical grouping and operator precedence. 8. Do not introduce or remove any fields, variables, functions, or logic not present in the original formula. 9. If the formula cannot be safely optimized without changing meaning or risking syntax errors, return the original formula as-is. Return only the optimized formula as a plain text string with no explanation, no markdown, and no formatting.';
-        
+
         String requestBody = System.JSON.serialize(new Map<String, Object>{
             'model' => 'gpt-4o-mini',
                 'temperature' => 0.2,
@@ -323,7 +323,13 @@ public with sharing class FormulaRiskScanner {
     }
     
     @AuraEnabled
-    public static Boolean updateFormula(String objectName, String fieldName, String newFormula,String type,String label) {
+    public static Boolean updateFormula(String objectName, String fieldName, String newFormula, String type, String label) {
+        
+        if (!isCustomUnmanagedField(fieldName)) {
+            System.debug('Skipping update: Not a custom unmanaged field => ' + fieldName);
+            return false;
+        }
+        
         mdt_updation.MetadataPort service = new mdt_updation.MetadataPort();
         service.SessionHeader = new mdt_updation.SessionHeader_element();
         service.SessionHeader.sessionId = UtilsGetSessionId.getSessionIdFromVFPage();
@@ -331,26 +337,71 @@ public with sharing class FormulaRiskScanner {
         mdt_updation.CustomField formulaField = new mdt_updation.CustomField();
         formulaField.fullName = objectName + '.' + fieldName;
         formulaField.formula = newFormula;
-        formulaField.type_x = type; 
-        formulaField.label = label; 
+        formulaField.type_x = type;
+        formulaField.label = label;
         
-        mdt_updation.SaveResult[] results = 
-            service.updateMetadata(new mdt_updation.Metadata[] { formulaField });
-        
-        if (results != null && results.size() > 0) {
-            if (results[0].success) {
-                System.debug('Formula field updated successfully.');
-                return true;
-            } else {
-                for (mdt_updation.Error error : results[0].errors) {
-                    System.debug('Error: ' + error.message);
-                }
+        switch on type {
+            when 'Number' {
+                formulaField.precision = 18;
+                formulaField.scale = 2;
+            }
+            when 'Currency' {
+                formulaField.precision = 16;
+                formulaField.scale = 2;
+            }
+            when 'Percent' {
+                formulaField.precision = 3;
+                formulaField.scale = 2;
+            }
+            when 'Text' {
+                formulaField.length = 255;
+            }
+            when 'Checkbox' {
+                // no additional properties needed
+            }
+            when 'Date' {
+                // no additional properties needed
+            }
+            when 'DateTime' {
+                // no additional properties needed
+            }
+            when 'Time' {
+                // no additional properties needed
+            }
+            when else {
+                System.debug('Unsupported return type: ' + type);
                 return false;
             }
-        } else {
-            System.debug('No results returned from updateMetadata call.');
+        }
+        
+        try {
+            mdt_updation.SaveResult[] results = service.updateMetadata(new mdt_updation.Metadata[] { formulaField });
+            
+            if (results != null && results.size() > 0) {
+                if (results[0].success) {
+                    System.debug('Formula field updated successfully.');
+                    return true;
+                } else {
+                    for (mdt_updation.Error error : results[0].errors) {
+                        System.debug('Error: ' + error.message);
+                    }
+                    return false;
+                }
+            } else {
+                System.debug('No results returned from updateMetadata call.');
+                return false;
+            }
+        } catch (Exception e) {
+            System.debug('Exception: ' + e.getMessage());
             return false;
         }
     }
+    
+    public static Boolean isCustomUnmanagedField(String fieldName) {
+        // Must end with __c and NOT be namespaced like xyz__Field__c
+        // So we allow only fields that match: Field__c (no double __ before __c)
+        return fieldName.endsWith('__c') && !Pattern.matches('.*__.+__c', fieldName);
+    }
+    
     
 }
