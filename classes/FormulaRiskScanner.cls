@@ -94,32 +94,32 @@ public with sharing class FormulaRiskScanner {
                 formulaMap.put(fd.DeveloperName,fd.QualifiedApiName);
             }
             
-            String objectQuery = 'SELECT Id FROM CustomObject WHERE DeveloperName = \'' + objectName.replace('__c', '') + '\'';
-            String objectEndpoint = 'callout:ToolingAPI/services/data/v59.0/tooling/query/?q=' + EncodingUtil.urlEncode(objectQuery, 'UTF-8');
+            String objectQuery = 'SELECT DurableId FROM EntityDefinition WHERE QualifiedApiName = \'' + objectName + '\'';
+            String entityDefEndpoint = 'callout:ToolingAPI/services/data/v59.0/tooling/query/?q=' + EncodingUtil.urlEncode(objectQuery, 'UTF-8');
             
             HttpRequest objectReq = new HttpRequest();
-            objectReq.setEndpoint(objectEndpoint);
+            objectReq.setEndpoint(entityDefEndpoint);
             objectReq.setMethod('GET');
             objectReq.setHeader('Content-Type', 'application/json');
             
-            Http http2 = new Http();
-            HttpResponse objectRes = http2.send(objectReq);
+            Http http = new Http();
+            HttpResponse objectRes = http.send(objectReq);
             
             Map<String, Object> objectJson = (Map<String, Object>) JSON.deserializeUntyped(objectRes.getBody());
             List<Object> objectRecords = (List<Object>) objectJson.get('records');
             
             if (objectRecords == null || objectRecords.isEmpty()) {
-                System.debug('CustomObject not found for: ' + objectName);
+                System.debug('EntityDefinition not found for: ' + objectName);
                 return null;
             }
             
             Map<String, Object> objectRecord = (Map<String, Object>) objectRecords[0];
-            String customObjectId = (String) objectRecord.get('Id');
+            String durableId = (String) objectRecord.get('DurableId'); 
             
-            Http http = new Http();
+            // Now loop through fields
             for (String fieldName : formulaFieldNames) {
-                String query = 'SELECT Id, Metadata, DeveloperName FROM CustomField WHERE DeveloperName = \'' + fieldName + '\' AND TableEnumOrId = \'' + customObjectId + '\'';
-                String toolingEndpoint = 'callout:ToolingAPI/services/data/v59.0/tooling/query/?q=' + EncodingUtil.urlEncode(query, 'UTF-8');
+                String fieldQuery = 'SELECT Id, Metadata, DeveloperName FROM CustomField WHERE DeveloperName = \'' + fieldName + '\' AND TableEnumOrId = \'' + durableId + '\'';
+                String toolingEndpoint = 'callout:ToolingAPI/services/data/v59.0/tooling/query/?q=' + EncodingUtil.urlEncode(fieldQuery, 'UTF-8');
                 
                 HttpRequest req = new HttpRequest();
                 req.setEndpoint(toolingEndpoint);
@@ -164,13 +164,19 @@ public with sharing class FormulaRiskScanner {
                                 finalOptimizedFormula = null; 
                             }
                             String devname=formulaMap.get(fieldName);
-                            results.add(new FormulaInfo(
-                                objectName, devname, depth, crossObj, heavyFuncCount,
-                                risk, usesSpecialFields, isTooLong, returnType,label, score,
-                                String.join(redFlags, '; '),
-                                finalFormula,
-                                finalOptimizedFormula
-                            ));
+                            
+                            if (!isCustomUnmanagedField(devname)) {
+                                System.debug('Skipping update: Not a custom unmanaged field => ' + devname);
+                            } else {
+                                results.add(new FormulaInfo(
+                                    objectName, devname, depth, crossObj, heavyFuncCount,
+                                    risk, usesSpecialFields, isTooLong, returnType, label, score,
+                                    String.join(redFlags, '; '),
+                                    finalFormula,
+                                    finalOptimizedFormula
+                                ));
+                            }
+                            
                             
                         }
                     }
@@ -284,7 +290,7 @@ public with sharing class FormulaRiskScanner {
     @AuraEnabled(cacheable=true)
     public static String optimizeFormula(String formula) {
         String endpoint = 'https://api.openai.com/v1/chat/completions';
-        String GPT_API_KEY = '';  // Add Your Key Here
+        String GPT_API_KEY = ''; // Add API Key Here
         HttpRequest req = new HttpRequest();
         req.setEndpoint(endpoint);
         req.setMethod('POST');
@@ -292,7 +298,7 @@ public with sharing class FormulaRiskScanner {
         req.setHeader('Authorization', 'Bearer ' + GPT_API_KEY);
         
         String prompt = 'You are a Salesforce formula field optimizer. Your goal is to simplify and optimize Salesforce formulas only if it can be done safely, without changing their logic, behavior, or output. Follow these strict rules: 1. Maintain the original meaning, logic, and output of the formula. 2. Follow Salesforce formula syntax strictly. Ensure that all formulas you return are valid and compile without syntax errors. 3. Always include required literals like 0 or "" when they serve as fallback or default values. 4. Preserve all data types (e.g., Number, Text, Boolean) and ensure all functions and operators are used correctly per Salesforce formula syntax. 5. Retain cross-object references, field references, and session variables (e.g., CreatedBy.Name, $User.Name) exactly as-is. 6. Do not alter any IF, CASE, ISBLANK, ISNUMBER, TEXT, or logical structures unless it results in a logically equivalent and safer simplification. 7. Maintain proper use of parentheses to ensure logical grouping and operator precedence. 8. Do not introduce or remove any fields, variables, functions, or logic not present in the original formula. 9. If the formula cannot be safely optimized without changing meaning or risking syntax errors, return the original formula as-is. Return only the optimized formula as a plain text string with no explanation, no markdown, and no formatting.';
-
+        
         String requestBody = System.JSON.serialize(new Map<String, Object>{
             'model' => 'gpt-4o-mini',
                 'temperature' => 0.2,
@@ -354,7 +360,7 @@ public with sharing class FormulaRiskScanner {
                 formulaField.scale = 2;
             }
             when 'Text' {
-                formulaField.length = 255;
+                // no additional properties needed
             }
             when 'Checkbox' {
                 // no additional properties needed
