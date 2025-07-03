@@ -88,6 +88,21 @@ export default class FormulaRiskAnalyzer extends LightningElement {
     @track isLoading = false;
     columns = COLS;
 
+    dependencyColumns = [{
+            label: 'Field Name',
+            fieldName: 'field'
+        },
+        {
+            label: 'Component Type',
+            fieldName: 'type'
+        },
+        {
+            label: 'Component Name',
+            fieldName: 'name'
+        }
+    ];
+
+
     connectedCallback() {
         this.fetchSObjectOptions();
     }
@@ -139,6 +154,29 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                     label: row.label
                 }));
             console.log(JSON.stringify(this.formulaComparisonList[0]));
+
+            this.dependencyData = [];
+
+            if (!this.rows || this.rows.length === 0) return;
+
+            this.rows.forEach(row => {
+                if (row.deps) {
+                    const lines = row.deps.split('\n');
+                    lines.forEach(line => {
+                        if (line.startsWith('- ')) {
+                            const parts = line.slice(2).split(':');
+                            if (parts.length === 2) {
+                                this.dependencyData.push({
+                                    field: row.fieldName,
+                                    type: parts[0].trim(),
+                                    name: parts[1].trim()
+                                });
+                            }
+                        }
+                    });
+                }
+            });
+
 
             this.isDataAvailable = this.rows.length > 0;
         } catch (error) {
@@ -205,6 +243,4 @@ export default class FormulaRiskAnalyzer extends LightningElement {
 
         }
     }
-
-
 }
