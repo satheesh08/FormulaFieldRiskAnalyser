@@ -255,11 +255,10 @@ By following these steps, you can configure Salesforce to communicate with the O
 ![image](https://github.com/user-attachments/assets/db0d893a-cded-4bc0-a932-e9c1e713616e)
 ![image](https://github.com/user-attachments/assets/df7aeef2-ae64-452a-99a1-93fe19ed9327)
 ![image](https://github.com/user-attachments/assets/26ad1c69-d5c3-4f41-bb6e-f6b35e935912)
-![image](https://github.com/user-attachments/assets/c8b9f4af-a9e7-4cea-8f07-925ec27a8991)
 
-Now you can able to replace the existing formula with the optimised one.
+You can replace the formula with the optimised one by clicking on the paste icon.
+![image](https://github.com/user-attachments/assets/cf765c07-e2bb-4398-9449-bb9f8c3734dc)
 
-![image](https://github.com/user-attachments/assets/152474dd-7730-479c-8feb-099ffdc05e6f)
 
 
 
