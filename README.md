@@ -253,8 +253,11 @@ By following these steps, you can configure Salesforce to communicate with the O
    * Displays risk indicators for each field
 
 ![image](https://github.com/user-attachments/assets/db0d893a-cded-4bc0-a932-e9c1e713616e)
-![image](https://github.com/user-attachments/assets/df7aeef2-ae64-452a-99a1-93fe19ed9327)
-![image](https://github.com/user-attachments/assets/26ad1c69-d5c3-4f41-bb6e-f6b35e935912)
+
+![image](https://github.com/user-attachments/assets/4a20dd74-1fb9-4225-ad26-98e6dcfdee77)
+
+![image](https://github.com/user-attachments/assets/6fe63bb4-8e48-4d8b-be32-27e4ef3da6cb)
+
 
 You can replace the formula with the optimised one by clicking on the paste icon.
 ![image](https://github.com/user-attachments/assets/cf765c07-e2bb-4398-9449-bb9f8c3734dc)
