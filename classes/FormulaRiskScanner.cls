@@ -166,6 +166,11 @@ public with sharing class FormulaRiskScanner {
                             if (formula != null && optimizedFormulaString != null && formula.trim() == optimizedFormulaString.trim()) {
                                 finalOptimizedFormula = null; 
                             }
+                            
+                            if(optimizedFormulaString=='Do not touch PROD'){
+                                finalOptimizedFormula = null;
+                            }
+                            
                             String devname=formulaMap.get(fieldName);
                             String dependencies = getMetadataDependencies(fieldId,fieldName);
                             dependencies = getListViewsUsingField(objectName,devname,dependencies);
@@ -295,6 +300,14 @@ public with sharing class FormulaRiskScanner {
     @AuraEnabled(cacheable=true)
     public static String optimizeFormula(String formula) {
         HttpRequest req = new HttpRequest();
+        
+        String domain = System.Url.getOrgDomainUrl().getHost().toLowerCase();
+        Boolean isSandbox = domain.contains('sandbox');
+        
+        if (!isSandbox) {
+            return 'Do not touch PROD';
+        }
+        
         req.setEndpoint('callout:Open_AI_API_Named_Cred/v1/chat/completions');
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
@@ -533,7 +546,7 @@ public with sharing class FormulaRiskScanner {
         }
         
         if (listViewsWithField.isEmpty()) {
-            summary = 'No list views found using field: ' + formulaField;
+            summary = summary;
         }
         
         return summary;
