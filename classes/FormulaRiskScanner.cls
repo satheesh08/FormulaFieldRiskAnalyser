@@ -302,7 +302,7 @@ public with sharing class FormulaRiskScanner {
         HttpRequest req = new HttpRequest();
         
         String domain = System.Url.getOrgDomainUrl().getHost().toLowerCase();
-        Boolean isSandbox = domain.contains('sandbox');
+        Boolean isSandbox = domain.contains('sandbox') || domain.contains('dev-ed');
         
         if (!isSandbox) {
             return 'Do not touch PROD';
