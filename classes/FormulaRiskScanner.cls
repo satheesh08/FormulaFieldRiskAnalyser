@@ -59,8 +59,9 @@ public with sharing class FormulaRiskScanner {
         @AuraEnabled public String label;
         @AuraEnabled public Integer cpuScore;
         @AuraEnabled public String cpuRedFlags;
+        @AuraEnabled public String deps;
         
-        public FormulaInfo(String o, String f, Integer d, Integer c, Integer h, String r, Boolean flag, Boolean tooLong, String rt,String lb, Integer score, String redFlags,String ogFx, String optFx) {
+        public FormulaInfo(String o, String f, Integer d, Integer c, Integer h, String r, Boolean flag, Boolean tooLong, String rt,String lb, Integer score, String redFlags,String ogFx, String optFx,String d2) {
             objectName = o;
             fieldName = f;
             depth = d;
@@ -75,6 +76,7 @@ public with sharing class FormulaRiskScanner {
             cpuRedFlags = redFlags;
             originalFormula=ogFx;
             optimizedFormula=optFx;
+            deps=d2;
         }
     }
     
@@ -132,6 +134,7 @@ public with sharing class FormulaRiskScanner {
                     List<Object> records = (List<Object>) jsonResponse.get('records');
                     if (!records.isEmpty()) {
                         Map<String, Object> rec = (Map<String, Object>) records[0];
+                        String fieldId=(String)rec.get('Id');
                         Map<String, Object> metadata = (Map<String, Object>) rec.get('Metadata');
                         if (metadata != null && metadata.containsKey('formula')) {
                             String formula = (String) metadata.get('formula');
@@ -164,6 +167,8 @@ public with sharing class FormulaRiskScanner {
                                 finalOptimizedFormula = null; 
                             }
                             String devname=formulaMap.get(fieldName);
+                            String dependencies = getMetadataDependencies(fieldId,fieldName);
+                            dependencies = getListViewsUsingField(objectName,devname,dependencies);
                             
                             if (!isCustomUnmanagedField(devname)) {
                                 System.debug('Skipping update: Not a custom unmanaged field => ' + devname);
@@ -173,7 +178,7 @@ public with sharing class FormulaRiskScanner {
                                     risk, usesSpecialFields, isTooLong, returnType, label, score,
                                     String.join(redFlags, '; '),
                                     finalFormula,
-                                    finalOptimizedFormula
+                                    finalOptimizedFormula,dependencies
                                 ));
                             }
                             
@@ -406,5 +411,141 @@ public with sharing class FormulaRiskScanner {
         return fieldName.endsWith('__c') && !Pattern.matches('.*__.+__c', fieldName);
     }
     
+    public static String getMetadataDependencies(String fieldId, String fieldDeveloperName) {
+        try {
+            String depQuery = 'SELECT MetadataComponentId, MetadataComponentName, MetadataComponentType ' +
+                'FROM MetadataComponentDependency ' +
+                'WHERE RefMetadataComponentId = \'' + fieldId + '\'';
+            String encodedDepQuery = EncodingUtil.urlEncode(depQuery, 'UTF-8');
+            
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint('callout:ToolingAPI/services/data/v59.0/tooling/query/?q=' + encodedDepQuery);
+            req.setMethod('GET');
+            
+            Http http = new Http();
+            HttpResponse res = http.send(req);
+            
+            if (res.getStatusCode() != 200) {
+                return 'Error fetching dependencies for ' + fieldDeveloperName + '__c: ' + res.getStatus();
+            }
+            
+            Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+            List<Object> records = (List<Object>) result.get('records');
+            
+            if (records.isEmpty()) {
+                return 'No metadata components reference the field "' + fieldDeveloperName + '__c".';
+            }
+            
+            String summary = 'Components referencing "' + fieldDeveloperName + '__c":\n';
+            for (Object obj : records) {
+                Map<String, Object> rec = (Map<String, Object>) obj;
+                String compType = (String) rec.get('MetadataComponentType');
+                String compName = (String) rec.get('MetadataComponentName');
+                summary += '- ' + compType + ': ' + compName + '\n';
+            }
+            
+            return summary;
+            
+        } catch (Exception ex) {
+            return 'Exception occurred while checking dependencies: ' + ex.getMessage();
+        }
+    }
     
+    public static String getListViewsUsingField(String objectApiName, String formulaField,String summary) {
+        Map<String, String> developerNameToLabel = new Map<String, String>();
+        List<String> listViewDeveloperNames = new List<String>();
+        
+        for (ListView lv : [SELECT DeveloperName, Name FROM ListView WHERE SObjectType = :objectApiName]) {
+            developerNameToLabel.put(lv.DeveloperName, lv.Name);
+            listViewDeveloperNames.add(lv.DeveloperName);
+        }
+        
+        Http http = new Http();
+        List<String> listViewsWithField = new List<String>();
+        
+        for (String devName : listViewDeveloperNames) {
+            String fullName = objectApiName + '.' + devName;
+            String sessionId = UtilsGetSessionId.getSessionIdFromVFPage(); // Assumes you have a VF method for session ID
+            
+            String requestBody = ''
+                + '<?xml version="1.0" encoding="UTF-8"?>'
+                + '<soapenv:Envelope xmlns:xsd="http://www.w3.org/2001/XMLSchema" '
+                + 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+                + 'xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" '
+                + 'xmlns:sf="http://soap.sforce.com/2006/04/metadata">'
+                + '<soapenv:Header>'
+                + '<sf:SessionHeader>'
+                + '<sf:sessionId>' + sessionId + '</sf:sessionId>'
+                + '</sf:SessionHeader>'
+                + '</soapenv:Header>'
+                + '<soapenv:Body>'
+                + '<sf:readMetadata>'
+                + '<sf:type>ListView</sf:type>'
+                + '<sf:fullNames>' + fullName + '</sf:fullNames>'
+                + '</sf:readMetadata>'
+                + '</soapenv:Body>'
+                + '</soapenv:Envelope>';
+            
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint('callout:ToolingAPI/services/Soap/m/59.0');
+            req.setMethod('POST');
+            req.setHeader('Content-Type', 'text/xml');
+            req.setHeader('SOAPAction', 'readMetadata');
+            req.setBody(requestBody);
+            
+            HttpResponse res = http.send(req);
+            String body = res.getBody();
+            
+            Dom.Document doc = new Dom.Document();
+            doc.load(body);
+            Dom.XmlNode root = doc.getRootElement();
+            Dom.XmlNode bodyNode = root.getChildElements()[0];
+            Dom.XmlNode responseNode = bodyNode.getChildElements()[0];
+            Dom.XmlNode resultNode = responseNode.getChildElements()[0];
+            
+            Dom.XmlNode recordsNode;
+            for (Dom.XmlNode node : resultNode.getChildElements()) {
+                if (node.getName() == 'records') {
+                    recordsNode = node;
+                    break;
+                }
+            }
+            
+            if (recordsNode == null) {
+                continue;
+            }
+            
+            List<String> allColumns = new List<String>();
+            collectColumns(recordsNode, allColumns);
+            
+            for (String val : allColumns) {
+                if (
+                    val != null &&
+                    (val.toLowerCase() == formulaField.toLowerCase() ||
+                     val.toLowerCase().endsWith('.' + formulaField.toLowerCase()))
+                ) {
+                    String label = developerNameToLabel.get(devName);
+                    listViewsWithField.add(label);
+                    summary += '- List View: ' + label + '\n';
+                    break;
+                }
+            }
+        }
+        
+        if (listViewsWithField.isEmpty()) {
+            summary = 'No list views found using field: ' + formulaField;
+        }
+        
+        return summary;
+    }
+    
+    // Recursive XML column parser
+    private static void collectColumns(Dom.XmlNode node, List<String> out) {
+        for (Dom.XmlNode child : node.getChildElements()) {
+            if (child.getName() == 'columns') {
+                out.add(child.getText().trim());
+            }
+            collectColumns(child, out);
+        }
+    }  
 }
