@@ -251,6 +251,7 @@ By following these steps, you can configure Salesforce to communicate with the O
    * Reads the `objectApiName` from the user.
    * Uses Tooling API to retrieve all formula fields for the selected object.
    * Displays risk indicators for each field
+   * Formula updates from the UI are supported only in sandbox environments, not in production.
 
 ![image](https://github.com/user-attachments/assets/db0d893a-cded-4bc0-a932-e9c1e713616e)
 
