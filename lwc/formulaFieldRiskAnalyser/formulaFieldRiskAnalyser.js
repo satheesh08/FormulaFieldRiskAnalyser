@@ -243,4 +243,31 @@ export default class FormulaRiskAnalyzer extends LightningElement {
 
         }
     }
+    get processedRows() {
+        return this.rows.map(row => ({
+            ...row,
+            coverage: `${row.recordCount || 0} / ${row.totalRecords || 0}`
+        }));
+    }
+
+    benchmarkColumns = [{
+            label: 'Formula Field',
+            fieldName: 'fieldName',
+            type: 'text'
+        },
+        {
+            label: 'CPU Time (ms)',
+            fieldName: 'cpuTimeMs',
+            type: 'number',
+            cellAttributes: {
+                alignment: 'left'
+            }
+        },
+        {
+            label: 'Record Coverage',
+            fieldName: 'coverage',
+            type: 'text'
+        }
+    ];
+
 }
