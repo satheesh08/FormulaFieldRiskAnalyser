@@ -1,5 +1,13 @@
 public with sharing class FormulaRiskScanner {
     
+    public class FormulaFieldTimeResult {
+        @AuraEnabled public String fieldName;
+        @AuraEnabled public Integer cpuTimeMs;
+        @AuraEnabled public Integer recordCount;
+        @AuraEnabled public Integer totalRecords;
+    }
+    
+    
     public class SObjectInfo implements Comparable {
         @AuraEnabled public String label;
         @AuraEnabled public String apiName;
@@ -61,7 +69,16 @@ public with sharing class FormulaRiskScanner {
         @AuraEnabled public String cpuRedFlags;
         @AuraEnabled public String deps;
         
-        public FormulaInfo(String o, String f, Integer d, Integer c, Integer h, String r, Boolean flag, Boolean tooLong, String rt,String lb, Integer score, String redFlags,String ogFx, String optFx,String d2) {
+        @AuraEnabled public Integer cpuTimeMs;
+        @AuraEnabled public Integer recordCount;
+        @AuraEnabled public Integer totalRecords;
+        
+        public FormulaInfo(
+            String o, String f, Integer d, Integer c, Integer h, String r,
+            Boolean flag, Boolean tooLong, String rt, String lb, Integer score,
+            String redFlags, String ogFx, String optFx, String d2,
+            Integer cpuMs, Integer recordCountVal, Integer totalRec
+        ) {
             objectName = o;
             fieldName = f;
             depth = d;
@@ -74,11 +91,16 @@ public with sharing class FormulaRiskScanner {
             label = lb;
             cpuScore = score;
             cpuRedFlags = redFlags;
-            originalFormula=ogFx;
-            optimizedFormula=optFx;
-            deps=d2;
+            originalFormula = ogFx;
+            optimizedFormula = optFx;
+            deps = d2;
+            
+            cpuTimeMs = cpuMs;
+            recordCount = recordCountVal;
+            totalRecords = totalRec;
         }
     }
+    
     
     @AuraEnabled(cacheable=true)
     public static List<FormulaInfo> getFormulaFields(String objectName) {
@@ -175,6 +197,14 @@ public with sharing class FormulaRiskScanner {
                             String dependencies = getMetadataDependencies(fieldId,fieldName);
                             dependencies = getListViewsUsingField(objectName,devname,dependencies);
                             
+                            List<FormulaFieldTimeResult> result = FormulaRiskScanner.getFormulaEvaluationTimes(objectName, devname);
+                            
+                            FormulaFieldTimeResult benchmark = result[0];
+                            
+                            Integer cpuTime = benchmark.cpuTimeMs;
+                            Integer recordsTested = benchmark.recordCount;
+                            Integer totalAvailable = benchmark.totalRecords;
+                            
                             if (!isCustomUnmanagedField(devname)) {
                                 System.debug('Skipping update: Not a custom unmanaged field => ' + devname);
                             } else {
@@ -183,7 +213,7 @@ public with sharing class FormulaRiskScanner {
                                     risk, usesSpecialFields, isTooLong, returnType, label, score,
                                     String.join(redFlags, '; '),
                                     finalFormula,
-                                    finalOptimizedFormula,dependencies
+                                    finalOptimizedFormula,dependencies,cpuTime,recordsTested,totalAvailable
                                 ));
                             }
                             
@@ -561,4 +591,41 @@ public with sharing class FormulaRiskScanner {
             collectColumns(child, out);
         }
     }  
+    
+    public static List<FormulaFieldTimeResult> getFormulaEvaluationTimes(String objectApiName, String fieldName) {
+        final Integer sampleSize = 1000;
+        
+        List<FormulaFieldTimeResult> resultList = new List<FormulaFieldTimeResult>();
+        
+        if (String.isBlank(objectApiName) || String.isBlank(fieldName)) {
+            return resultList; 
+        }
+        
+        Integer totalRecords = (Integer) Database.countQuery('SELECT COUNT() FROM ' + objectApiName);
+        
+        String baseQuery = 'SELECT Id FROM ' + objectApiName + ' LIMIT ' + sampleSize;
+        List<SObject> baseRecords = Database.query(baseQuery);
+        if (baseRecords.isEmpty()) return resultList;
+        
+        Set<Id> recordIds = new Map<Id, SObject>(baseRecords).keySet();
+        
+        try {
+            String query = 'SELECT Id, ' + fieldName + ' FROM ' + objectApiName + ' WHERE Id IN :recordIds';
+            Long start = Limits.getCpuTime();
+            List<SObject> testRecords = Database.query(query);
+            for (SObject s : testRecords) {
+                s.get(fieldName); // Force evaluation
+            }
+            Long endMs = Limits.getCpuTime();
+            
+            FormulaFieldTimeResult res = new FormulaFieldTimeResult();
+            res.fieldName = fieldName;
+            res.cpuTimeMs = (Integer)(endMs - start);
+            res.recordCount = testRecords.size();
+            res.totalRecords = totalRecords;
+            resultList.add(res);
+        } catch (Exception e) {
+        }
+        return resultList;
+    }   
 }
