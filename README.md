@@ -73,6 +73,10 @@ this tool helps surface these risks — and now, thanks to AI, even helps you so
 
 ## 🧩 Prerequisites
 
+# Create a Static Resource and load the chartjs.js file.
+![image](https://github.com/user-attachments/assets/cd8a4e74-a812-47fa-a288-fb857d7786fc)
+
+
 # How to Obtain an OpenAI API Key
 
 To use the OpenAI API, you'll need to obtain an API key. Follow these steps to get your API key from OpenAI.
