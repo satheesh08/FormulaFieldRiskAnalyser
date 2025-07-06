@@ -642,7 +642,10 @@ public with sharing class FormulaRiskScanner {
             resultList.add(res);
         } catch (Exception e) {
             // log or rethrow if needed
-        }   
+        }
+        
         return resultList;
-    }   
+    }
+    
+    
 }
