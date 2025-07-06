@@ -596,7 +596,7 @@ public with sharing class FormulaRiskScanner {
     }  
     
     public static List<FormulaFieldTimeResult> getFormulaEvaluationTimes(String objectApiName, String fieldName) {
-        final Integer sampleSize = 10000;
+        final Integer sampleSize = 4000;
         List<FormulaFieldTimeResult> resultList = new List<FormulaFieldTimeResult>();
         
         if (String.isBlank(objectApiName) || String.isBlank(fieldName)) {
@@ -642,8 +642,7 @@ public with sharing class FormulaRiskScanner {
             resultList.add(res);
         } catch (Exception e) {
             // log or rethrow if needed
-        }
-        
+        }   
         return resultList;
     }   
 }
