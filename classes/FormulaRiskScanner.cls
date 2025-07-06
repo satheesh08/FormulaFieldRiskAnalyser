@@ -3,6 +3,7 @@ public with sharing class FormulaRiskScanner {
     public class FormulaFieldTimeResult {
         @AuraEnabled public String fieldName;
         @AuraEnabled public Integer cpuTimeMs;
+        @AuraEnabled public Integer wallTimeMs;
         @AuraEnabled public Integer recordCount;
         @AuraEnabled public Integer totalRecords;
     }
@@ -70,6 +71,7 @@ public with sharing class FormulaRiskScanner {
         @AuraEnabled public String deps;
         
         @AuraEnabled public Integer cpuTimeMs;
+        @AuraEnabled public Integer wallTimeMs;
         @AuraEnabled public Integer recordCount;
         @AuraEnabled public Integer totalRecords;
         
@@ -77,7 +79,7 @@ public with sharing class FormulaRiskScanner {
             String o, String f, Integer d, Integer c, Integer h, String r,
             Boolean flag, Boolean tooLong, String rt, String lb, Integer score,
             String redFlags, String ogFx, String optFx, String d2,
-            Integer cpuMs, Integer recordCountVal, Integer totalRec
+            Integer cpuMs, Integer recordCountVal, Integer totalRec,Integer wallMs
         ) {
             objectName = o;
             fieldName = f;
@@ -94,7 +96,7 @@ public with sharing class FormulaRiskScanner {
             originalFormula = ogFx;
             optimizedFormula = optFx;
             deps = d2;
-            
+            wallTimeMs = wallMs;
             cpuTimeMs = cpuMs;
             recordCount = recordCountVal;
             totalRecords = totalRec;
@@ -202,6 +204,7 @@ public with sharing class FormulaRiskScanner {
                             FormulaFieldTimeResult benchmark = result[0];
                             
                             Integer cpuTime = benchmark.cpuTimeMs;
+                            Integer wallTime = benchmark.wallTimeMs;
                             Integer recordsTested = benchmark.recordCount;
                             Integer totalAvailable = benchmark.totalRecords;
                             
@@ -213,7 +216,7 @@ public with sharing class FormulaRiskScanner {
                                     risk, usesSpecialFields, isTooLong, returnType, label, score,
                                     String.join(redFlags, '; '),
                                     finalFormula,
-                                    finalOptimizedFormula,dependencies,cpuTime,recordsTested,totalAvailable
+                                    finalOptimizedFormula,dependencies,cpuTime,recordsTested,totalAvailable,wallTime
                                 ));
                             }
                             
@@ -342,7 +345,7 @@ public with sharing class FormulaRiskScanner {
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
         
-        String prompt = 'You are a Salesforce formula field optimizer. Your goal is to simplify and optimize Salesforce formulas only if it can be done safely, without changing their logic, behavior, or output. Follow these strict rules: 1. Maintain the original meaning, logic, and output of the formula. 2. Follow Salesforce formula syntax strictly. Ensure that all formulas you return are valid and compile without syntax errors. 3. Always include required literals like 0 or "" when they serve as fallback or default values. 4. Preserve all data types (e.g., Number, Text, Boolean) and ensure all functions and operators are used correctly per Salesforce formula syntax. 5. Retain cross-object references, field references, and session variables (e.g., CreatedBy.Name, $User.Name) exactly as-is. 6. Do not alter any IF, CASE, ISBLANK, ISNUMBER, TEXT, or logical structures unless it results in a logically equivalent and safer simplification. 7. Maintain proper use of parentheses to ensure logical grouping and operator precedence. 8. Do not introduce or remove any fields, variables, functions, or logic not present in the original formula. 9. If the formula cannot be safely optimized without changing meaning or risking syntax errors, return the original formula as-is. Return only the optimized formula as a plain text string with no explanation, no markdown, and no formatting.';
+        String prompt = 'You are a Salesforce formula field optimizer. Your goal is to simplify and optimize Salesforce formulas wherever possible. You should preserve the formulas logic and output, but you are allowed to safely restructure or flatten logic for clarity and performance. Maintain correct Salesforce syntax and preserve field references, but you may refactor nested IFs, remove redundant conditions, and consolidate logic where behavior remains equivalent. Return the optimized formula as a plain text string with no explanation, no markdown, and no formatting.';
         
         String requestBody = System.JSON.serialize(new Map<String, Object>{
             'model' => 'gpt-4o-mini',
@@ -593,8 +596,7 @@ public with sharing class FormulaRiskScanner {
     }  
     
     public static List<FormulaFieldTimeResult> getFormulaEvaluationTimes(String objectApiName, String fieldName) {
-        final Integer sampleSize = 1000;
-        
+        final Integer sampleSize = 10000;
         List<FormulaFieldTimeResult> resultList = new List<FormulaFieldTimeResult>();
         
         if (String.isBlank(objectApiName) || String.isBlank(fieldName)) {
@@ -611,21 +613,37 @@ public with sharing class FormulaRiskScanner {
         
         try {
             String query = 'SELECT Id, ' + fieldName + ' FROM ' + objectApiName + ' WHERE Id IN :recordIds';
-            Long start = Limits.getCpuTime();
-            List<SObject> testRecords = Database.query(query);
-            for (SObject s : testRecords) {
-                s.get(fieldName); // Force evaluation
+            
+            Long cpuStart = Limits.getCpuTime();
+            Long wallStart = System.currentTimeMillis();
+            
+            List<SObject> records = Database.query(query);
+            
+            // Force evaluation by manipulating the field
+            for (SObject s : records) {
+                Object val = s.get(fieldName);
+                if (val != null) {
+                    String dummy = val.toString().trim().toLowerCase(); // force full eval
+                }
             }
-            Long endMs = Limits.getCpuTime();
+            
+            Long cpuEnd = Limits.getCpuTime();
+            Long wallEnd = System.currentTimeMillis();
+            
+            Long wallTime = wallEnd - wallStart;
+            Long cpuTime = cpuEnd - cpuStart;
             
             FormulaFieldTimeResult res = new FormulaFieldTimeResult();
             res.fieldName = fieldName;
-            res.cpuTimeMs = (Integer)(endMs - start);
-            res.recordCount = testRecords.size();
+            res.cpuTimeMs = (Integer)cpuTime;
+            res.wallTimeMs = (Integer)wallTime;
+            res.recordCount = records.size();
             res.totalRecords = totalRecords;
             resultList.add(res);
         } catch (Exception e) {
+            // log or rethrow if needed
         }
+        
         return resultList;
     }   
 }
