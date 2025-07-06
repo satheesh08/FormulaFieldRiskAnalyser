@@ -8,6 +8,10 @@ import updateFormula from '@salesforce/apex/FormulaRiskScanner.updateFormula';
 import {
     ShowToastEvent
 } from 'lightning/platformShowToastEvent';
+import {
+    loadScript
+} from 'lightning/platformResourceLoader';
+import ChartJS from '@salesforce/resourceUrl/ChartJs';
 
 const COLS = [{
         label: 'Object',
@@ -87,6 +91,10 @@ export default class FormulaRiskAnalyzer extends LightningElement {
     @track isDataAvailable = false;
     @track isLoading = false;
     columns = COLS;
+
+    chartJsInitialized = false;
+    chart;
+
 
     dependencyColumns = [{
             label: 'Field Name',
@@ -179,12 +187,81 @@ export default class FormulaRiskAnalyzer extends LightningElement {
 
 
             this.isDataAvailable = this.rows.length > 0;
+            await this.loadChartLibrary();
+            this.renderChart();
+
         } catch (error) {
             console.error('Error loading formula fields:', error);
         } finally {
             this.isLoading = false;
         }
     }
+
+    async loadChartLibrary() {
+        if (this.chartJsInitialized) return;
+        await loadScript(this, ChartJS);
+        this.chartJsInitialized = true;
+    }
+
+    renderChart() {
+        const canvas = this.template.querySelector('canvas');
+        if (!canvas) return;
+
+        if (this.chart) {
+            this.chart.destroy();
+        }
+
+        const labels = this.rows.map(r => r.fieldName);
+        const cpuTimes = this.rows.map(r => r.cpuTimeMs || 0);
+        const wallTimes = this.rows.map(r => r.wallTimeMs || 0);
+        const recordCounts = this.rows.map(r => r.recordCount || 0);
+
+        const ctx = canvas.getContext('2d');
+        this.chart = new window.Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                        label: 'CPU Time (ms)',
+                        data: cpuTimes,
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)'
+                    },
+                    {
+                        label: 'Wall Time (ms)',
+                        data: wallTimes,
+                        backgroundColor: 'rgba(255, 99, 132, 0.7)'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Formula Field Evaluation Times'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterBody: (context) => {
+                                const index = context[0].dataIndex;
+                                return 'Records: ' + recordCounts[index];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Time (ms)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
 
     getRiskClass(level) {
         switch (level) {
@@ -269,5 +346,4 @@ export default class FormulaRiskAnalyzer extends LightningElement {
             type: 'text'
         }
     ];
-
 }
