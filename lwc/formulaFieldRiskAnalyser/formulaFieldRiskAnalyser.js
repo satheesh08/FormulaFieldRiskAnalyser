@@ -1,87 +1,41 @@
-import {
-    LightningElement,
-    track
-} from 'lwc';
+import { LightningElement, track } from 'lwc';
 import getFormulaFields from '@salesforce/apex/FormulaRiskScanner.getFormulaFields';
 import getAllSObjectNames from '@salesforce/apex/FormulaRiskScanner.getAllSObjectNames';
 import updateFormula from '@salesforce/apex/FormulaRiskScanner.updateFormula';
-import {
-    ShowToastEvent
-} from 'lightning/platformShowToastEvent';
-import {
-    loadScript
-} from 'lightning/platformResourceLoader';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import { loadScript } from 'lightning/platformResourceLoader';
 import ChartJS from '@salesforce/resourceUrl/ChartJs';
+import ECharts from '@salesforce/resourceUrl/EChartJS';
 
-const COLS = [{
-        label: 'Object',
-        fieldName: 'objectName'
-    },
-    {
-        label: 'Field',
-        fieldName: 'fieldName'
-    },
-    {
-        label: 'Depth',
-        fieldName: 'depth',
-        type: 'text'
-    },
-    {
-        label: 'Hops',
-        fieldName: 'crossObjectHops',
-        type: 'text'
-    },
-    {
-        label: 'Return Type',
-        fieldName: 'returnType',
-        type: 'text'
-    },
-    {
-        label: 'Heavy Functions',
-        fieldName: 'heavyFunctionCount',
-        type: 'text'
-    },
+const COLS = [
+    { label: 'Object', fieldName: 'objectName' },
+    { label: 'Field', fieldName: 'fieldName' },
+    { label: 'Depth', fieldName: 'depth', type: 'text' },
+    { label: 'Hops', fieldName: 'crossObjectHops', type: 'text' },
+    { label: 'Return Type', fieldName: 'returnType', type: 'text' },
+    { label: 'Heavy Functions', fieldName: 'heavyFunctionCount', type: 'text' },
     {
         label: 'Risk Level',
         fieldName: 'riskLevel',
         cellAttributes: {
-            class: {
-                fieldName: 'riskLevelClass'
-            },
-            iconName: {
-                fieldName: 'riskLevelIcon'
-            },
+            class: { fieldName: 'riskLevelClass' },
+            iconName: { fieldName: 'riskLevelIcon' },
             iconPosition: 'left'
         }
     },
-    {
-        label: 'Score',
-        fieldName: 'cpuScore',
-        type: 'number'
-    },
+    { label: 'Score', fieldName: 'cpuScore', type: 'number' },
     {
         label: 'Red Flags',
         fieldName: 'cpuRedFlags',
         type: 'text',
         wrapText: true,
         cellAttributes: {
-            title: {
-                fieldName: 'cpuRedFlags'
-            }
+            title: { fieldName: 'cpuRedFlags' }
         }
     },
-    {
-        label: 'Uses $User/$RecordType',
-        fieldName: 'usesRecordTypeOrUser',
-        type: 'text'
-    },
-    {
-        label: 'Formula Too Long',
-        fieldName: 'isFormulaTooLong',
-        type: 'text'
-    }
+    { label: 'Uses $User/$RecordType', fieldName: 'usesRecordTypeOrUser', type: 'text' },
+    { label: 'Formula Too Long', fieldName: 'isFormulaTooLong', type: 'text' }
 ];
-
 
 export default class FormulaRiskAnalyzer extends LightningElement {
     @track objectOptions = [];
@@ -90,26 +44,11 @@ export default class FormulaRiskAnalyzer extends LightningElement {
     @track rows = [];
     @track isDataAvailable = false;
     @track isLoading = false;
-    columns = COLS;
+    @track dependencyData = [];
 
+    columns = COLS;
     chartJsInitialized = false;
     chart;
-
-
-    dependencyColumns = [{
-            label: 'Field Name',
-            fieldName: 'field'
-        },
-        {
-            label: 'Component Type',
-            fieldName: 'type'
-        },
-        {
-            label: 'Component Name',
-            fieldName: 'name'
-        }
-    ];
-
 
     connectedCallback() {
         this.fetchSObjectOptions();
@@ -119,10 +58,7 @@ export default class FormulaRiskAnalyzer extends LightningElement {
         this.isLoading = true;
         try {
             const data = await getAllSObjectNames();
-            this.objectOptions = data.map(obj => ({
-                label: obj.label,
-                value: obj.apiName
-            }));
+            this.objectOptions = data.map(obj => ({ label: obj.label, value: obj.apiName }));
         } catch (error) {
             console.error('Error fetching object names:', error);
         } finally {
@@ -141,15 +77,13 @@ export default class FormulaRiskAnalyzer extends LightningElement {
         this.rows = [];
 
         try {
-            const data = await getFormulaFields({
-                objectName: this.selectedObject
-            });
+            const data = await getFormulaFields({ objectName: this.selectedObject });
+
             this.rows = data.map(row => ({
                 ...row,
                 riskLevelClass: this.getRiskClass(row.riskLevel),
                 riskLevelIcon: this.getRiskIcon(row.riskLevel)
             }));
-            console.log(JSON.stringify(this.rows[0]));
 
             this.formulaComparisonList = data
                 .filter(row => row.originalFormula && row.optimizedFormula)
@@ -161,12 +95,8 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                     type: row.returnType,
                     label: row.label
                 }));
-            console.log(JSON.stringify(this.formulaComparisonList[0]));
 
             this.dependencyData = [];
-
-            if (!this.rows || this.rows.length === 0) return;
-
             this.rows.forEach(row => {
                 if (row.deps) {
                     const lines = row.deps.split('\n');
@@ -185,10 +115,11 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                 }
             });
 
-
             this.isDataAvailable = this.rows.length > 0;
+
             await this.loadChartLibrary();
             this.renderChart();
+            this.renderGraph();
 
         } catch (error) {
             console.error('Error loading formula fields:', error);
@@ -198,9 +129,13 @@ export default class FormulaRiskAnalyzer extends LightningElement {
     }
 
     async loadChartLibrary() {
-        if (this.chartJsInitialized) return;
-        await loadScript(this, ChartJS);
-        this.chartJsInitialized = true;
+        if (!this.chartJsInitialized) {
+            await Promise.all([
+                loadScript(this, ChartJS),
+                loadScript(this, ECharts)
+            ]);
+            this.chartJsInitialized = true;
+        }
     }
 
     renderChart() {
@@ -221,7 +156,8 @@ export default class FormulaRiskAnalyzer extends LightningElement {
             type: 'bar',
             data: {
                 labels,
-                datasets: [{
+                datasets: [
+                    {
                         label: 'CPU Time (ms)',
                         data: cpuTimes,
                         backgroundColor: 'rgba(54, 162, 235, 0.7)'
@@ -242,7 +178,7 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                     },
                     tooltip: {
                         callbacks: {
-                            afterBody: (context) => {
+                            afterBody: context => {
                                 const index = context[0].dataIndex;
                                 return 'Records: ' + recordCounts[index];
                             }
@@ -262,30 +198,117 @@ export default class FormulaRiskAnalyzer extends LightningElement {
         });
     }
 
+renderGraph() {
+    const container = this.template.querySelector('.sankey-chart');
+    if (!container || !window.echarts) return;
+
+    const nodes = [];
+    const links = [];
+    const nodeMap = new Map();
+
+    // Assign colors based on type
+    const getColor = (type) => {
+        switch (type.toLowerCase()) {
+            case 'flow': return '#4caf50';
+            case 'apex': return '#e91e63';
+            case 'field': return '#0070d2';
+            default: return '#ff9800'; // fallback for others
+        }
+    };
+
+    this.dependencyData.forEach(({ field, type, name }) => {
+        const from = field;
+        const to = name;
+        const typeKey = type.toLowerCase();
+
+        // Add nodes if not already added
+        if (!nodeMap.has(from)) {
+            nodeMap.set(from, true);
+            nodes.push({
+                name: from,
+                itemStyle: { color: getColor('field') }
+            });
+        }
+
+        if (!nodeMap.has(to)) {
+            nodeMap.set(to, true);
+            nodes.push({
+                name: to,
+                itemStyle: { color: getColor(typeKey) }
+            });
+        }
+
+        links.push({
+            source: from,
+            target: to,
+            label: { show: true, formatter: type }, // shows Flow/Apex/etc.
+            lineStyle: {
+                color: getColor(typeKey),
+                width: 2
+            }
+        });
+    });
+
+    const chart = window.echarts.init(container);
+
+    chart.setOption({
+        backgroundColor: '#111',
+        tooltip: {
+            trigger: 'item',
+            formatter: function (params) {
+                if (params.dataType === 'edge') {
+                    return `${params.data.source} → ${params.data.target}<br/>Type: ${params.data.label.formatter}`;
+                } else {
+                    return params.data.name;
+                }
+            }
+        },
+        series: [{
+            type: 'graph',
+            layout: 'force',
+            data: nodes,
+            links: links,
+            roam: true,
+            focusNodeAdjacency: true,
+            force: {
+                repulsion: 150,
+                edgeLength: 100
+            },
+            label: {
+                show: true,
+                position: 'right',
+                color: '#fff',
+                fontSize: 12
+            },
+            lineStyle: {
+                opacity: 0.9,
+                curveness: 0.3
+            },
+            emphasis: {
+                focus: 'adjacency',
+                lineStyle: {
+                    width: 3
+                }
+            }
+        }]
+    });
+}
 
     getRiskClass(level) {
         switch (level) {
-            case 'High':
-                return 'slds-text-color_error';
-            case 'Medium':
-                return 'slds-text-color_warning';
-            case 'Low':
-                return 'slds-text-color_success';
-            default:
-                return '';
+            case 'High': return 'slds-text-color_error';
+            case 'Medium': return 'slds-text-color_warning';
+            case 'Low': return 'slds-text-color_success';
+            default: return '';
         }
     }
 
     getRiskIcon(level) {
         switch (level) {
-            case 'High':
-                return 'utility:warning';
-            case 'Medium':
-                return 'utility:info';
-            case 'Low':
-                return 'utility:check';
-            default:
-                return '';
+            case 'High': return 'utility:warning';
+            case 'Medium': return 'utility:info';
+            case 'Low': return 'utility:check';
+            default: return '';
         }
     }
 
@@ -315,35 +338,14 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                             ...item,
                             index: idx
                         }));
-
-                })
-
+                });
         }
     }
+
     get processedRows() {
         return this.rows.map(row => ({
             ...row,
             coverage: `${row.recordCount || 0} / ${row.totalRecords || 0}`
         }));
     }
-
-    benchmarkColumns = [{
-            label: 'Formula Field',
-            fieldName: 'fieldName',
-            type: 'text'
-        },
-        {
-            label: 'CPU Time (ms)',
-            fieldName: 'cpuTimeMs',
-            type: 'number',
-            cellAttributes: {
-                alignment: 'left'
-            }
-        },
-        {
-            label: 'Record Coverage',
-            fieldName: 'coverage',
-            type: 'text'
-        }
-    ];
 }
