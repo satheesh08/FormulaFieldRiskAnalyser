@@ -69,6 +69,8 @@ public with sharing class FormulaRiskScanner {
         @AuraEnabled public Integer cpuScore;
         @AuraEnabled public String cpuRedFlags;
         @AuraEnabled public String deps;
+        @AuraEnabled public Boolean isNonDeterministic;
+
         
         @AuraEnabled public Integer cpuTimeMs;
         @AuraEnabled public Integer wallTimeMs;
@@ -79,7 +81,7 @@ public with sharing class FormulaRiskScanner {
             String o, String f, Integer d, Integer c, Integer h, String r,
             Boolean flag, Boolean tooLong, String rt, String lb, Integer score,
             String redFlags, String ogFx, String optFx, String d2,
-            Integer cpuMs, Integer recordCountVal, Integer totalRec,Integer wallMs
+            Integer cpuMs, Integer recordCountVal, Integer totalRec,Integer wallMs,Boolean nonDet
         ) {
             objectName = o;
             fieldName = f;
@@ -100,6 +102,7 @@ public with sharing class FormulaRiskScanner {
             cpuTimeMs = cpuMs;
             recordCount = recordCountVal;
             totalRecords = totalRec;
+            isNonDeterministic=nonDet;
         }
     }
     
@@ -171,8 +174,10 @@ public with sharing class FormulaRiskScanner {
                             Boolean usesSpecialFields = containsRecordTypeOrUser(formula);
                             Boolean isTooLong = formula.length() > 3000;
                             Boolean unbalanced = hasUnbalancedParentheses(formula);
-                            String risk = calculateRisk(depth, crossObj, heavyFuncCount, isTooLong || unbalanced);
+                            String risk = calculateRisk(depth, crossObj, heavyFuncCount, isTooLong || unbalanced);                            
+                            Boolean isNonDeterministic = isNonDeterministicFormula(formula);
                             
+
                             // Red flags
                             List<String> redFlags = new List<String>();
                             if (isTooLong) redFlags.add('Formula > 3000 chars');
@@ -181,8 +186,10 @@ public with sharing class FormulaRiskScanner {
                             if (heavyFuncCount > 0) redFlags.add('Heavy functions: ' + String.valueOf(heavyFuncCount));
                             if (crossObj >= 3) redFlags.add('Deep cross-object hops');
                             if (depth >= 6) redFlags.add('Excessive nesting');
+                            if (isNonDeterministic) redFlags.add('Uses Non-Deterministic Logic');
                             
-                            Integer score = depth * 2 + crossObj * 2 + heavyFuncCount * 3 + (isTooLong ? 5 : 0) + (unbalanced ? 5 : 0);
+                            Integer score = depth * 2 + crossObj * 2 + heavyFuncCount * 3 + (isTooLong ? 5 : 0) + (unbalanced ? 5 : 0) + (isNonDeterministic ? 5 : 0);
+
                             
                             String finalFormula = formula;
                             String finalOptimizedFormula = optimizedFormulaString;
@@ -216,7 +223,7 @@ public with sharing class FormulaRiskScanner {
                                     risk, usesSpecialFields, isTooLong, returnType, label, score,
                                     String.join(redFlags, '; '),
                                     finalFormula,
-                                    finalOptimizedFormula,dependencies,cpuTime,recordsTested,totalAvailable,wallTime
+                                    finalOptimizedFormula,dependencies,cpuTime,recordsTested,totalAvailable,wallTime,isNonDeterministic
                                 ));
                             }
                             
@@ -232,6 +239,69 @@ public with sharing class FormulaRiskScanner {
         }
         return results;
     }
+    
+    private static final List<String> NON_DETERMINISTIC_PATTERNS = new List<String>{
+        // Time-based functions
+        '(?i)\\bNOW\\s*\\(',
+            '(?i)\\bTODAY\\s*\\(',
+            '(?i)\\bDATEVALUE\\s*\\(',
+            '(?i)\\bDATETIMEVALUE\\s*\\(',
+            '(?i)\\bTIMEVALUE\\s*\\(',
+            '(?i)\\bYEAR\\s*\\(\\s*(NOW|TODAY)\\s*\\(',
+            '(?i)\\bMONTH\\s*\\(\\s*(NOW|TODAY)\\s*\\(',
+            '(?i)\\bDAY\\s*\\(\\s*(NOW|TODAY)\\s*\\(',
+            '(?i)\\bWEEKDAY\\s*\\(\\s*(NOW|TODAY)\\s*\\(',
+            
+            // User/profile/org context
+            '(?i)\\$USER',
+            '(?i)\\$PROFILE',
+            '(?i)\\$PERMISSION',
+            '(?i)\\$SETUP',
+            '(?i)\\$USERROLE',
+            '(?i)\\$ORGANIZATION',
+            '(?i)\\$RECORDTYPE',
+
+            
+            // DML-sensitive
+            '(?i)\\bISCHANGED\\s*\\(',
+            '(?i)\\bPRIORVALUE\\s*\\(',
+            '(?i)\\bISNEW\\s*\\(',
+            
+            // Heavy/dynamic lookup
+            '(?i)\\bDISTANCE\\s*\\(',
+            '(?i)\\bGEOLOCATION\\s*\\(',
+            '(?i)\\bVLOOKUP\\s*\\(',
+            
+            // Metadata/label/settings references
+            '(?i)\\$CUSTOMMETADATA',
+            '(?i)\\$CUSTOMSETTING',
+            '(?i)\\$LABEL',
+            
+            // Cross-object references
+            '(?i)\\b[a-zA-Z_][a-zA-Z0-9_]*__r(?:\\.[a-zA-Z_][a-zA-Z0-9_]*){1,}',
+            
+            // System / user / role class access
+            '(?i)\\bSYSTEM\\.',
+            '(?i)\\bUSER\\.',
+            '(?i)\\bUSERROLE\\.',
+            
+            // Owner-related hierarchy
+            '(?i)\\bOWNER\\.(MANAGER|USERROLE|PROFILE|NAME)'
+            };
+                
+                private static Boolean isNonDeterministicFormula(String formula) {
+                    if (String.isBlank(formula)) return false;
+                    for (String pattern : NON_DETERMINISTIC_PATTERNS) {
+                        System.Pattern p = System.Pattern.compile(pattern);
+                        System.Matcher m = p.matcher(formula);
+                        if (m.find()) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+    
+    
     
     private static Integer countDotDepth(String formula) {
         Set<String> knownFunctions = new Set<String>{
