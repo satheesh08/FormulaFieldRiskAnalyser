@@ -269,6 +269,7 @@ By following these steps, you can configure Salesforce to communicate with the O
 
 
 You can replace the formula with the optimised one by clicking on the paste icon.
+
 ![image](https://github.com/user-attachments/assets/0197a154-909f-4fcf-aeda-384a555c8e19)
 
 
