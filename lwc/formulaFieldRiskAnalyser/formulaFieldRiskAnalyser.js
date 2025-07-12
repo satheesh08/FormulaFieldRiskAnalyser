@@ -5,6 +5,7 @@ import {
 import getFormulaFields from '@salesforce/apex/FormulaRiskScanner.getFormulaFields';
 import getAllSObjectNames from '@salesforce/apex/FormulaRiskScanner.getAllSObjectNames';
 import updateFormula from '@salesforce/apex/FormulaRiskScanner.updateFormula';
+import sendForecastEmail from '@salesforce/apex/FormulaRiskScanner.sendForecastEmail';
 import {
     ShowToastEvent
 } from 'lightning/platformShowToastEvent';
@@ -13,7 +14,7 @@ import {
 } from 'lightning/platformResourceLoader';
 import ChartJS from '@salesforce/resourceUrl/ChartJs';
 import ECharts from '@salesforce/resourceUrl/EChartJS';
-
+import html2canvasLib from '@salesforce/resourceUrl/html2canvas';
 const COLS = [{
         label: 'Object',
         fieldName: 'objectName'
@@ -93,6 +94,7 @@ const COLS = [{
         }
     }
 
+
 ];
 
 export default class FormulaRiskAnalyzer extends LightningElement {
@@ -112,6 +114,126 @@ export default class FormulaRiskAnalyzer extends LightningElement {
     forecastData = [];
     forecastChart;
     selectedForecastLabel = '';
+
+    showToast(title, message, variant) {
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title,
+                message,
+                variant
+            })
+        );
+    }
+
+    handleSendEmail() {
+        const chartCanvas = this.template.querySelector('.forecastChart');
+        if (!chartCanvas) {
+            this.showToast('Error', 'Chart not found.', 'error');
+            return;
+        }
+
+        this.addWatermark(chartCanvas, 'FormulaSniffR');
+        const chartImage = chartCanvas.toDataURL('image/png');
+        this.isForecastModalOpen = false;
+
+        if (this.forecastChart) {
+            this.forecastChart.destroy();
+            this.forecastChart = null;
+        }
+
+        setTimeout(() => {
+            const matchingRow = this.rows?.find(
+                row => row.fieldName == this.selectedForecastLabel
+            );
+
+            if (!matchingRow) {
+                this.showToast('Error', 'Matching forecast record not found.', 'error');
+                return;
+            }
+
+            let tableHtml = `
+      <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; font-family:sans-serif; width:100%; max-width:600px;">
+        <thead style="background:#f0f0f0;">
+          <tr><th colspan="2" style="text-align:left;">FormulaSniffR Summary - ${this.selectedForecastLabel}</th></tr>
+        </thead>
+        <tbody>`;
+
+            for (let key in matchingRow) {
+                if (matchingRow.hasOwnProperty(key)) {
+
+                    if (key === 'riskLevelIcon' || key === 'riskLevelClass') {
+                        continue;
+                    }
+
+                    let displayKey = key
+                        .replace(/([a-z])([A-Z])/g, '$1 $2')
+                        .replace(/^./, str => str.toUpperCase());
+
+                    let value = matchingRow[key];
+
+                    if (key === 'cpuScore') {
+                        value = `
+        ${value} (Calculated as: 
+          +2 × Nesting level + 
+          +2 × Cross-object references + 
+          +3 × Heavy functions + 
+          +5 if too long + 
+          +5 if unbalanced + 
+          +5 if non-deterministic logic
+        )
+      `;
+                    }
+
+                    if (key === 'forecastScore' && typeof value === 'string') {
+                        const now = value.match(/Now Score:\s*(\d+)/)?.[1] || '';
+                        const sixMonths = value.match(/In 6 months:\s*(\d+)/)?.[1] || '';
+                        const oneYear = value.match(/In 1 year:\s*(\d+)/)?.[1] || '';
+                        value = `
+        Now: ${now}<br/>
+        In 6 months: ${sixMonths}<br/>
+        In 1 year: ${oneYear}
+      `;
+                    }
+
+                    tableHtml += `
+      <tr>
+        <td style="font-weight:bold; background:#fafafa;">${displayKey}</td>
+        <td>${value}</td>
+      </tr>`;
+                }
+            }
+
+
+
+            tableHtml += `</tbody></table>`;
+
+            sendForecastEmail({
+                    chartImage: chartImage,
+                    formulaLabel: this.selectedForecastLabel || 'Forecast',
+                    recordSummaryHtml: tableHtml
+                })
+                .then(() => {
+                    this.showToast('Email Sent', 'Forecast summary sent to Admins.', 'success');
+                })
+                .catch(error => {
+                    console.error('Email send failed:', error);
+                    this.showToast('Email Failed', 'Something went wrong while sending the email.', 'error');
+                });
+        }, 400);
+    }
+
+
+
+
+    addWatermark(canvas, text) {
+        const ctx = canvas.getContext('2d');
+        ctx.font = '20px Arial';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.textAlign = 'right';
+        ctx.fillText(text, canvas.width - 20, canvas.height - 20);
+    }
+
+
 
     connectedCallback() {
         this.fetchSObjectOptions();
@@ -200,7 +322,8 @@ export default class FormulaRiskAnalyzer extends LightningElement {
         if (!this.chartJsInitialized) {
             await Promise.all([
                 loadScript(this, ChartJS),
-                loadScript(this, ECharts)
+                loadScript(this, ECharts),
+                loadScript(this, html2canvasLib)
             ]);
             this.chartJsInitialized = true;
         }
@@ -216,6 +339,8 @@ export default class FormulaRiskAnalyzer extends LightningElement {
             this.drawChart();
         }
     }
+
+
 
     parseForecast(raw) {
         const scoreMap = {
@@ -254,7 +379,7 @@ export default class FormulaRiskAnalyzer extends LightningElement {
             }
 
             this.forecastChart = new window.Chart(ctx, {
-                type: 'radar', 
+                type: 'radar',
                 data: {
                     labels: this.forecastData.labels,
                     datasets: [{
@@ -308,6 +433,8 @@ export default class FormulaRiskAnalyzer extends LightningElement {
         }, 0);
     }
 
+
+
     closeForecastModal() {
         this.isForecastModalOpen = false;
         if (this.forecastChart) {
@@ -315,6 +442,7 @@ export default class FormulaRiskAnalyzer extends LightningElement {
             this.forecastChart = null;
         }
     }
+
 
     renderChart() {
         const canvas = this.template.querySelector('canvas');
@@ -417,6 +545,7 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                     return '#ff9800';
             }
         };
+
 
         this.dependencyData.forEach(({
             field,
