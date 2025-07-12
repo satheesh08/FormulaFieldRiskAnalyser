@@ -80,7 +80,20 @@ const COLS = [{
         label: 'Formula Too Long',
         fieldName: 'isFormulaTooLong',
         type: 'text'
+    },
+    {
+        label: 'Forecast',
+        type: 'button-icon',
+        typeAttributes: {
+            iconName: 'utility:chart',
+            name: 'forecast',
+            title: 'Forecast the complexity',
+            variant: 'border-filled',
+            alternativeText: 'Forecast'
+        }
     }
+
+
 ];
 
 export default class FormulaRiskAnalyzer extends LightningElement {
@@ -95,6 +108,12 @@ export default class FormulaRiskAnalyzer extends LightningElement {
     columns = COLS;
     chartJsInitialized = false;
     chart;
+
+    isForecastModalOpen = false;
+    forecastData = [];
+    forecastChart;
+    selectedForecastLabel = '';
+
 
     connectedCallback() {
         this.fetchSObjectOptions();
@@ -135,6 +154,8 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                 riskLevelClass: this.getRiskClass(row.riskLevel),
                 riskLevelIcon: this.getRiskIcon(row.riskLevel)
             }));
+            console.log('Data' + JSON.stringify(this.rows[0]));
+
 
             this.formulaComparisonList = data
                 .filter(row => row.originalFormula && row.optimizedFormula)
@@ -188,6 +209,121 @@ export default class FormulaRiskAnalyzer extends LightningElement {
             this.chartJsInitialized = true;
         }
     }
+    handleRowAction(event) {
+        const actionName = event.detail.action.name;
+        const row = event.detail.row;
+
+        if (actionName === 'forecast') {
+            this.selectedForecastLabel = row.devname || row.fieldName || 'Formula';
+            this.forecastData = this.parseForecast(row.forecastScore);
+            this.isForecastModalOpen = true;
+            this.drawChart(); // Now renders radial chart
+        }
+    }
+
+
+
+    parseForecast(raw) {
+        const scoreMap = {
+            now: 0,
+            '6 months': 0,
+            '1 year': 0
+        };
+
+        const lines = raw.split('\n');
+        lines.forEach(line => {
+            const match = line.match(/(Now|6\s*months|1\s*year)[^\d]*(\d+)/i);
+            if (match) {
+                const label = match[1].toLowerCase();
+                const score = parseInt(match[2], 10);
+
+                if (label.includes('now')) scoreMap['now'] = score;
+                else if (label.includes('6')) scoreMap['6 months'] = score;
+                else if (label.includes('1')) scoreMap['1 year'] = score;
+            }
+        });
+
+        return {
+            labels: ['Now', '6 Months', '1 Year'],
+            scores: [scoreMap['now'], scoreMap['6 months'], scoreMap['1 year']]
+        };
+    }
+
+    drawChart() {
+        setTimeout(() => {
+            const ctx = this.template.querySelector('.forecastChart');
+            if (!ctx) return;
+
+            if (this.forecastChart) {
+                this.forecastChart.destroy();
+                this.forecastChart = null;
+            }
+
+            this.forecastChart = new window.Chart(ctx, {
+                type: 'radar', // You can switch to 'doughnut', 'polarArea', or 'radar' for more dynamics
+                data: {
+                    labels: this.forecastData.labels,
+                    datasets: [{
+                        label: `Forecast Score - ${this.selectedForecastLabel}`,
+                        data: this.forecastData.scores,
+                        backgroundColor: 'rgba(0, 112, 210, 0.2)',
+                        borderColor: '#0070d2',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#0070d2'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        r: {
+                            angleLines: {
+                                display: true
+                            },
+                            suggestedMin: 0,
+                            suggestedMax: Math.max(...this.forecastData.scores) + 10,
+                            ticks: {
+                                stepSize: 5,
+                                backdropColor: 'transparent'
+                            },
+                            pointLabels: {
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `Score: ${context.formattedValue}`
+                            }
+                        },
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Forecasted CPU Complexity',
+                            font: {
+                                size: 16
+                            }
+                        }
+                    }
+                }
+            });
+        }, 0);
+    }
+
+
+
+    closeForecastModal() {
+        this.isForecastModalOpen = false;
+        if (this.forecastChart) {
+            this.forecastChart.destroy();
+            this.forecastChart = null;
+        }
+    }
+
 
     renderChart() {
         const canvas = this.template.querySelector('canvas');
