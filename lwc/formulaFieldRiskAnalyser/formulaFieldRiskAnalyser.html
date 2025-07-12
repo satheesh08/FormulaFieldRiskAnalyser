@@ -1,8 +1,25 @@
 <template>
-  <lightning-card title="Formula CPU Risk Analyzer" icon-name="utility:formula">
+  <lightning-card title="Formula Field Risk Analyzer" icon-name="utility:formula">
     <div class="slds-p-around_medium slds-grid slds-grid_vertical-align-center slds-grid_align-spread">
       <lightning-combobox name="objectSelector" label="Select Object" placeholder="Choose an object" options={objectOptions} value={selectedObject} onchange={handleObjectChange} class="slds-size_medium"></lightning-combobox>
     </div>
+    <template if:true={isForecastModalOpen}>
+      <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+        <div class="slds-modal__container">
+          <header class="slds-modal__header">
+            <lightning-button-icon icon-name="utility:close" onclick={closeForecastModal} class="slds-modal__close" alternative-text="Close"></lightning-button-icon>
+            <h2 class="slds-modal__title slds-hyphenate">Forecast Score Trend for {selectedForecastLabel}</h2>
+          </header>
+          <div class="slds-modal__content slds-p-around_medium slds-grid slds-grid_align-center">
+            <canvas class="forecastChart" lwc:dom="manual"></canvas>
+          </div>
+          <footer class="slds-modal__footer">
+            <lightning-button variant="neutral" label="Close" onclick={closeForecastModal}></lightning-button>
+          </footer>
+        </div>
+      </section>
+      <div class="slds-backdrop slds-backdrop_open"></div>
+    </template>
     <template if:true={isLoading}>
       <div class="spinner-container slds-p-around_medium slds-align_absolute-center slds-text-align_center">
         <lightning-spinner alternative-text="Loading..." size="medium" variant="brand"></lightning-spinner>
@@ -11,7 +28,7 @@
     </template>
     <template if:true={isDataAvailable}>
       <div class="slds-scrollable_x">
-        <lightning-datatable key-field="fieldName" data={rows} columns={columns} hide-checkbox-column class="custom-table" min-column-width="100"></lightning-datatable>
+        <lightning-datatable key-field="fieldName" data={rows} columns={columns} onrowaction={handleRowAction} hide-checkbox-column class="custom-table" min-column-width="100"></lightning-datatable>
       </div>
       <div class="slds-grid slds-wrap slds-m-top_medium">
         <div class="slds-col slds-size_1-of-3 slds-p-around_small">
