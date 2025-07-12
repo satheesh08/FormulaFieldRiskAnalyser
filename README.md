@@ -268,13 +268,15 @@ By following these steps, you can configure Salesforce to communicate with the O
 ![image](https://github.com/user-attachments/assets/6fe63bb4-8e48-4d8b-be32-27e4ef3da6cb)
 
 
+You can see the forecast by clicking on the chart icon.
+
+<img width="1353" height="641" alt="image" src="https://github.com/user-attachments/assets/1ed03b1f-f640-41a9-ab23-92bdd11580e8" />
+
+
+
 You can replace the formula with the optimised one by clicking on the paste icon.
 
-![image](https://github.com/user-attachments/assets/0197a154-909f-4fcf-aeda-384a555c8e19)
-
-
-
-
+<img width="1352" height="644" alt="image" src="https://github.com/user-attachments/assets/1426f010-2e49-4fa5-97ae-4b1a02641511" />
 
 ## 📅 Salesforce Compatibility
 
