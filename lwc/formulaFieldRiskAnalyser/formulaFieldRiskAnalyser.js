@@ -154,9 +154,7 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                 riskLevelClass: this.getRiskClass(row.riskLevel),
                 riskLevelIcon: this.getRiskIcon(row.riskLevel)
             }));
-            console.log('Data' + JSON.stringify(this.rows[0]));
-
-
+        
             this.formulaComparisonList = data
                 .filter(row => row.originalFormula && row.optimizedFormula)
                 .map((row, index) => ({
