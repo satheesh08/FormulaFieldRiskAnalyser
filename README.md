@@ -270,9 +270,10 @@ By following these steps, you can configure Salesforce to communicate with the O
 ![image](https://github.com/user-attachments/assets/6fe63bb4-8e48-4d8b-be32-27e4ef3da6cb)
 
 
-You can see the forecast by clicking on the chart icon.
+You can see the forecast by clicking on the chart icon,plus you can send email to all admins regarding the complexity
 
-<img width="1353" height="641" alt="image" src="https://github.com/user-attachments/assets/1ed03b1f-f640-41a9-ab23-92bdd11580e8" />
+<img width="1349" height="637" alt="image" src="https://github.com/user-attachments/assets/fd9cb710-d94f-4e22-b27d-d8aeaec6f456" />
+Attaching a sample email in this branch.
 
 
 
