@@ -1,149 +1,152 @@
-<template>
-  <lightning-card title="Formula Field Risk Analyzer" icon-name="utility:formula">
-    <div class="slds-p-around_medium slds-grid slds-grid_vertical-align-center slds-grid_align-spread">
-      <lightning-combobox name="objectSelector" label="Select Object" placeholder="Choose an object" options={objectOptions} value={selectedObject} onchange={handleObjectChange} class="slds-size_medium"></lightning-combobox>
+  <template>
+    <div class="mainContentArea" data-id="mainContentArea">
+      <lightning-card title="Formula Field Risk Analyzer" icon-name="utility:formula">
+        <div class="slds-p-around_medium slds-grid slds-grid_vertical-align-center slds-grid_align-spread">
+          <lightning-combobox name="objectSelector" label="Select Object" placeholder="Choose an object" options={objectOptions} value={selectedObject} onchange={handleObjectChange} class="slds-size_medium"></lightning-combobox>
+        </div>
+        <template if:true={isDataAvailable}>
+          <div class="slds-scrollable_x">
+            <lightning-datatable key-field="fieldName" data={rows} columns={columns} onrowaction={handleRowAction} hide-checkbox-column class="custom-table" min-column-width="100"></lightning-datatable>
+          </div>
+          <div class="slds-grid slds-wrap slds-m-top_medium">
+            <div class="slds-col slds-size_1-of-3 slds-p-around_small">
+              <div class="slds-box slds-theme_shade">
+                <p class="slds-text-title_bold slds-m-bottom_small">CPU Score Legend</p>
+                <ul class="slds-list_dotted slds-p-left_medium slds-text-body_regular">
+                  <li>
+                    <strong>+2</strong> for each level of <strong>nesting</strong> (depth)
+                  </li>
+                  <li>
+                    <strong>+2</strong> for each <strong>cross-object hop</strong>
+                  </li>
+                  <li>
+                    <strong>+3</strong> for each <strong>heavy function</strong>
+                    <br />
+                    <small>(e.g., <code>ISCHANGED</code>, <code>VLOOKUP</code>) </small>
+                  </li>
+                  <li>
+                    <strong>+5</strong> if the formula is <strong>too long</strong>
+                    <br />
+                    <small>(&gt;3000 characters)</small>
+                  </li>
+                  <li>
+                    <strong>+5</strong> if the formula is <strong>unbalanced</strong>
+                    <br />
+                    <small>(parentheses)</small>
+                  </li>
+                  <li>
+                    <strong>+5</strong> if the formula has <strong>non-deterministic logic</strong>
+                    <br />
+                    <small>($USER/$PROFILE)</small>
+                  </li>
+                </ul>
+                <div class="slds-m-top_medium slds-box slds-theme_alert-texture slds-theme_info">
+                  <p class="slds-text-title_bold slds-m-bottom_x-small">Non-Deterministic Formula Patterns</p>
+                  <ul class="slds-list_dotted slds-p-left_medium slds-text-body_regular">
+                    <li>Formulas that reference <code>$User</code>, <code>$Profile</code>, <code>$UserRole</code>, <code>$Permission</code>, or <code>$Organization</code>
+                    </li>
+                    <li>References to <code>$RecordType</code>, which depend on runtime context </li>
+                    <li>Formulas that use <strong>dynamic setup data</strong> like <code>$Setup</code> or <code>$Label</code>
+                    </li>
+                    <li>Expressions relying on <strong>user-specific</strong> or <strong>session-specific</strong> context </li>
+                  </ul>
+                  <p class="slds-m-top_x-small"> These formulas are evaluated per user/session and may impact performance due to their dynamic nature. Consider reviewing them closely for efficiency. </p>
+                </div>
+                <p class="slds-m-top_small slds-text-color_weak"> Use this score to assess potential CPU risk based on formula structure. </p>
+              </div>
+            </div>
+            <div class="slds-col slds-size_1-of-3 slds-p-around_small">
+              <lightning-card title="Performance & Dependency Visualization">
+                <div class="slds-grid slds-wrap slds-p-around_medium">
+                  <div class="slds-col slds-size_1-of-2">
+                    <canvas lwc:dom="manual" class="chart" style="width: 100%; height: 400px;"></canvas>
+                  </div>
+                  <div class="slds-col slds-size_1-of-2">
+                    <div class="sankey-chart" lwc:dom="manual" style="width: 100%; height: 400px; background-color: #111; border-radius: 8px;"></div>
+                  </div>
+                </div>
+              </lightning-card>
+            </div>
+            <div class="slds-col slds-size_1-of-3 slds-p-around_small">
+              <div class="slds-box slds-theme_default">
+                <p class="slds-text-title_bold slds-m-bottom_small">Formula Optimization</p>
+                <template if:true={formulaComparisonList}>
+                  <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_fixed-layout">
+                    <thead>
+                      <tr class="slds-line-height_reset">
+                        <th>
+                          <div class="slds-truncate" title="Field Name">Field Name</div>
+                        </th>
+                        <th>
+                          <div class="slds-truncate" title="Original Formula">Original</div>
+                        </th>
+                        <th>
+                          <div class="slds-truncate" title="Optimized Formula">Optimized</div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template for:each={formulaComparisonList} for:item="record">
+                        <tr key={record.originalFormula}>
+                          <td>
+                            <div class="slds-truncate">
+                              <code>{record.devname}</code>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="slds-truncate">
+                              <code>{record.originalFormula}</code>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center" style="max-width: 100%">
+                              <div class="slds-truncate" style="flex-grow:1; max-width: 90%">
+                                <code title={record.optimizedFormula}>{record.optimizedFormula}</code>
+                              </div>
+                              <lightning-button-icon icon-name="utility:copy" alternative-text="Use Optimized" title="Use Optimized" data-index={record.index} onclick={handleUseOptimized} variant="bare" class="slds-m-left_x-small"></lightning-button-icon>
+                            </div>
+                          </td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </template>
+                <template if:false={formulaComparisonList}>
+                  <p class="slds-text-color_weak">No optimized formulas found.</p>
+                </template>
+              </div>
+            </div>
+          </div>
+        </template>
+        <template if:true={isForecastModalOpen}>
+          <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+            <div class="slds-modal__container">
+              <header class="slds-modal__header">
+                <lightning-button-icon icon-name="utility:close" onclick={closeForecastModal} class="slds-modal__close" alternative-text="Close"></lightning-button-icon>
+                <h2 class="slds-modal__title slds-hyphenate">Forecast Score Trend for {selectedForecastLabel}</h2>
+              </header>
+              <div class="slds-modal__content slds-p-around_medium slds-grid slds-grid_align-center">
+                <canvas class="forecastChart" lwc:dom="manual"></canvas>
+              </div>
+              <footer class="slds-modal__footer">
+                <lightning-button variant="brand" label="Send Email to Admins" title="Send UI + Forecast" onclick={handleSendEmail}></lightning-button>
+                <lightning-button class="slds-m-left_small" variant="neutral" label="Close" onclick={closeForecastModal}></lightning-button>
+              </footer>
+            </div>
+          </section>
+          <div class="slds-backdrop slds-backdrop_open"></div>
+        </template>
+        <template if:true={isLoading}>
+          <div class="spinner-container slds-p-around_medium slds-align_absolute-center slds-text-align_center">
+            <lightning-spinner alternative-text="Loading..." size="medium" variant="brand"></lightning-spinner>
+            <p class="slds-m-top_small slds-text-heading_small">🔍 Give us a moment… We're sniffing the object!</p>
+          </div>
+        </template>
+        <template if:false={isLoading}>
+          <template if:false={isDataAvailable}>
+            <div class="slds-p-around_medium slds-text-color_weak slds-align_absolute-center"> No formula fields found or access denied. </div>
+          </template>
+        </template>
+      </lightning-card>
     </div>
-    <template if:true={isForecastModalOpen}>
-      <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
-        <div class="slds-modal__container">
-          <header class="slds-modal__header">
-            <lightning-button-icon icon-name="utility:close" onclick={closeForecastModal} class="slds-modal__close" alternative-text="Close"></lightning-button-icon>
-            <h2 class="slds-modal__title slds-hyphenate">Forecast Score Trend for {selectedForecastLabel}</h2>
-          </header>
-          <div class="slds-modal__content slds-p-around_medium slds-grid slds-grid_align-center">
-            <canvas class="forecastChart" lwc:dom="manual"></canvas>
-          </div>
-          <footer class="slds-modal__footer">
-            <lightning-button variant="neutral" label="Close" onclick={closeForecastModal}></lightning-button>
-          </footer>
-        </div>
-      </section>
-      <div class="slds-backdrop slds-backdrop_open"></div>
-    </template>
-    <template if:true={isLoading}>
-      <div class="spinner-container slds-p-around_medium slds-align_absolute-center slds-text-align_center">
-        <lightning-spinner alternative-text="Loading..." size="medium" variant="brand"></lightning-spinner>
-        <p class="slds-m-top_small slds-text-heading_small">🔍 Give us a moment… We're sniffing the object!</p>
-      </div>
-    </template>
-    <template if:true={isDataAvailable}>
-      <div class="slds-scrollable_x">
-        <lightning-datatable key-field="fieldName" data={rows} columns={columns} onrowaction={handleRowAction} hide-checkbox-column class="custom-table" min-column-width="100"></lightning-datatable>
-      </div>
-      <div class="slds-grid slds-wrap slds-m-top_medium">
-        <div class="slds-col slds-size_1-of-3 slds-p-around_small">
-          <div class="slds-box slds-theme_shade">
-            <p class="slds-text-title_bold slds-m-bottom_small">CPU Score Legend</p>
-            <ul class="slds-list_dotted slds-p-left_medium slds-text-body_regular">
-              <li>
-                <strong>+2</strong> for each level of <strong>nesting</strong> (depth)
-              </li>
-              <li>
-                <strong>+2</strong> for each <strong>cross-object hop</strong>
-              </li>
-              <li>
-                <strong>+3</strong> for each <strong>heavy function</strong>
-                <br />
-                <small>(e.g., <code>ISCHANGED</code>, <code>VLOOKUP</code>) </small>
-              </li>
-              <li>
-                <strong>+5</strong> if the formula is <strong>too long</strong>
-                <br />
-                <small>(&gt;3000 characters)</small>
-              </li>
-              <li>
-                <strong>+5</strong> if the formula is <strong>unbalanced</strong>
-                <br />
-                <small>(parentheses)</small>
-              </li>
-              <li>
-                <strong>+5</strong> if the formula has <strong>non-deterministic logic</strong>
-                <br />
-                <small>($USER/$PROFILE)</small>
-              </li>
-            </ul>
-            <div class="slds-m-top_medium slds-box slds-theme_alert-texture slds-theme_info">
-              <p class="slds-text-title_bold slds-m-bottom_x-small">Non-Deterministic Formula Patterns</p>
-              <ul class="slds-list_dotted slds-p-left_medium slds-text-body_regular">
-                <li>Formulas that reference <code>$User</code>, <code>$Profile</code>, <code>$UserRole</code>, <code>$Permission</code>, or <code>$Organization</code>
-                </li>
-                <li>References to <code>$RecordType</code>, which depend on runtime context </li>
-                <li>Formulas that use <strong>dynamic setup data</strong> like <code>$Setup</code> or <code>$Label</code>
-                </li>
-                <li>Expressions relying on <strong>user-specific</strong> or <strong>session-specific</strong> context </li>
-              </ul>
-              <p class="slds-m-top_x-small"> These formulas are evaluated per user/session and may impact performance due to their dynamic nature. Consider reviewing them closely for efficiency. </p>
-            </div>
-            <p class="slds-m-top_small slds-text-color_weak"> Use this score to assess potential CPU risk based on formula structure. </p>
-          </div>
-        </div>
-        <div class="slds-col slds-size_1-of-3 slds-p-around_small">
-          <lightning-card title="Performance & Dependency Visualization">
-            <div class="slds-grid slds-wrap slds-p-around_medium">
-              <div class="slds-col slds-size_1-of-2">
-                <canvas lwc:dom="manual" class="chart" style="width: 100%; height: 400px;"></canvas>
-              </div>
-              <div class="slds-col slds-size_1-of-2">
-                <div class="sankey-chart" lwc:dom="manual" style="width: 100%; height: 400px; background-color: #111; border-radius: 8px;"></div>
-              </div>
-            </div>
-          </lightning-card>
-        </div>
-        <div class="slds-col slds-size_1-of-3 slds-p-around_small">
-          <div class="slds-box slds-theme_default">
-            <p class="slds-text-title_bold slds-m-bottom_small">Formula Optimization</p>
-            <template if:true={formulaComparisonList}>
-              <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_fixed-layout">
-                <thead>
-                  <tr class="slds-line-height_reset">
-                    <th>
-                      <div class="slds-truncate" title="Field Name">Field Name</div>
-                    </th>
-                    <th>
-                      <div class="slds-truncate" title="Original Formula">Original</div>
-                    </th>
-                    <th>
-                      <div class="slds-truncate" title="Optimized Formula">Optimized</div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template for:each={formulaComparisonList} for:item="record">
-                    <tr key={record.originalFormula}>
-                      <td>
-                        <div class="slds-truncate">
-                          <code>{record.devname}</code>
-                        </div>
-                      </td>
-                      <td>
-                        <div class="slds-truncate">
-                          <code>{record.originalFormula}</code>
-                        </div>
-                      </td>
-                      <td>
-                        <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center" style="max-width: 100%">
-                          <div class="slds-truncate" style="flex-grow:1; max-width: 90%">
-                            <code title={record.optimizedFormula}>{record.optimizedFormula}</code>
-                          </div>
-                          <lightning-button-icon icon-name="utility:copy" alternative-text="Use Optimized" title="Use Optimized" data-index={record.index} onclick={handleUseOptimized} variant="bare" class="slds-m-left_x-small"></lightning-button-icon>
-                        </div>
-                      </td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
-            </template>
-            <template if:false={formulaComparisonList}>
-              <p class="slds-text-color_weak">No optimized formulas found.</p>
-            </template>
-          </div>
-        </div>
-      </div>
-    </template>
-    <template if:false={isLoading}>
-      <template if:false={isDataAvailable}>
-        <div class="slds-p-around_medium slds-text-color_weak slds-align_absolute-center"> No formula fields found or access denied. </div>
-      </template>
-    </template>
-  </lightning-card>
-</template>
+  </template>
