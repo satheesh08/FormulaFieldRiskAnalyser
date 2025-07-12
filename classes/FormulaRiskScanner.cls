@@ -636,4 +636,43 @@ public with sharing class FormulaRiskScanner {
         }
         return resultList;
     }
+    
+    @AuraEnabled(cacheable=true)
+    public static void sendForecastEmail(String chartImage, String formulaLabel, String recordSummaryHtml) {
+        List<User> admins = [SELECT Email FROM User WHERE Profile.Name = 'System Administrator' AND IsActive = TRUE AND Id != :UserInfo.getUserId()];
+        if (admins.isEmpty()) return;
+        
+        String chartBase64 = chartImage.replaceFirst('^data:image\\/png;base64,', '');
+        
+        Messaging.EmailFileAttachment chartAttachment = new Messaging.EmailFileAttachment();
+        chartAttachment.setFileName('Forecast_' + formulaLabel + '_Chart.png');
+        chartAttachment.setBody(EncodingUtil.base64Decode(chartBase64));
+        chartAttachment.setContentType('image/png');
+        
+        Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+        email.setSubject('FormulaSniffR Forecast & Summary: ' + formulaLabel);
+        email.setSenderDisplayName('FormulaSniffR Notifier');
+        User currentUser = [SELECT Email FROM User WHERE Id = :UserInfo.getUserId()];
+        email.setReplyTo(currentUser.Email);
+        
+        String htmlBody = ''
+            + '<p>Hi Admin,</p>'
+            + '<p>Attached is the forecast chart for <strong>' + formulaLabel + '</strong>.</p>'
+            + '<p>Below is a summary of the record:</p>'
+            + recordSummaryHtml
+            + '<p style="margin-top:16px;">Thanks,<br/>FormulaSniffR Bot</p>';
+        
+        email.setHtmlBody(htmlBody);
+        email.setFileAttachments(new List<Messaging.EmailFileAttachment>{ chartAttachment });
+        
+        List<String> toEmails = new List<String>();
+        for (User u : admins) {
+            toEmails.add(u.Email);
+        }
+        email.setToAddresses(toEmails);
+        
+        Messaging.sendEmail(new List<Messaging.SingleEmailMessage>{ email });
+    }
+    
+    
 }
