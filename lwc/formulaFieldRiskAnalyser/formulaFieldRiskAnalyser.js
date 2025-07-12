@@ -93,7 +93,6 @@ const COLS = [{
         }
     }
 
-
 ];
 
 export default class FormulaRiskAnalyzer extends LightningElement {
@@ -113,7 +112,6 @@ export default class FormulaRiskAnalyzer extends LightningElement {
     forecastData = [];
     forecastChart;
     selectedForecastLabel = '';
-
 
     connectedCallback() {
         this.fetchSObjectOptions();
@@ -154,7 +152,7 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                 riskLevelClass: this.getRiskClass(row.riskLevel),
                 riskLevelIcon: this.getRiskIcon(row.riskLevel)
             }));
-        
+
             this.formulaComparisonList = data
                 .filter(row => row.originalFormula && row.optimizedFormula)
                 .map((row, index) => ({
@@ -215,11 +213,9 @@ export default class FormulaRiskAnalyzer extends LightningElement {
             this.selectedForecastLabel = row.devname || row.fieldName || 'Formula';
             this.forecastData = this.parseForecast(row.forecastScore);
             this.isForecastModalOpen = true;
-            this.drawChart(); // Now renders radial chart
+            this.drawChart();
         }
     }
-
-
 
     parseForecast(raw) {
         const scoreMap = {
@@ -258,7 +254,7 @@ export default class FormulaRiskAnalyzer extends LightningElement {
             }
 
             this.forecastChart = new window.Chart(ctx, {
-                type: 'radar', // You can switch to 'doughnut', 'polarArea', or 'radar' for more dynamics
+                type: 'radar', 
                 data: {
                     labels: this.forecastData.labels,
                     datasets: [{
@@ -312,8 +308,6 @@ export default class FormulaRiskAnalyzer extends LightningElement {
         }, 0);
     }
 
-
-
     closeForecastModal() {
         this.isForecastModalOpen = false;
         if (this.forecastChart) {
@@ -321,7 +315,6 @@ export default class FormulaRiskAnalyzer extends LightningElement {
             this.forecastChart = null;
         }
     }
-
 
     renderChart() {
         const canvas = this.template.querySelector('canvas');
@@ -424,7 +417,6 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                     return '#ff9800';
             }
         };
-
 
         this.dependencyData.forEach(({
             field,
