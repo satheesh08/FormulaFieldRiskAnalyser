@@ -73,12 +73,14 @@ this tool helps surface these risks — and now, thanks to AI, even helps you so
 
 ## 🧩 Prerequisites
 
-# Create a Static Resource and load the chartjs.js file.
+### Create a Static Resource and load the chartjs.js file.
 ![image](https://github.com/user-attachments/assets/cd8a4e74-a812-47fa-a288-fb857d7786fc)
 
-# Create a Static Resource and load the echarts.min.js file.
+### Create a Static Resource and load the echarts.min.js file.
 ![image](https://github.com/user-attachments/assets/90243846-5bd0-416b-8ff2-4d47822761a5)
 
+### Create a Static Resource and load the html2canvas.min.js file.
+<img width="1181" height="346" alt="image" src="https://github.com/user-attachments/assets/ee2c174d-9d4f-4b0e-821c-45a660cedcaa" />
 
 
 # How to Obtain an OpenAI API Key
