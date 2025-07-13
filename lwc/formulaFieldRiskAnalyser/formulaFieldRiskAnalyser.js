@@ -174,12 +174,12 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                     if (key === 'cpuScore') {
                         value = `
         ${value} (Calculated as: 
-          +2 × Nesting level + 
-          +2 × Cross-object references + 
-          +3 × Heavy functions + 
-          +5 if too long + 
-          +5 if unbalanced + 
-          +5 if non-deterministic logic
+          (+2) × Nesting level + 
+          (+2) × Cross-object references + 
+          (+3) × Heavy functions + 
+          (+5) if too long + 
+          (+5) if unbalanced + 
+          (+5) if non-deterministic logic
         )
       `;
                     }
@@ -195,6 +195,39 @@ export default class FormulaRiskAnalyzer extends LightningElement {
       `;
                     }
 
+                    if (key === 'dna' && typeof value === 'object') {
+                        const dnaMetrics = value;
+
+                        const dnaLegendMap = {
+                            complexity: 'Formula length & nested functions',
+                            chainDepth: 'Depth of field dependencies',
+                            blastRadius: 'Used in Apex, Flows, etc.',
+                            volatility: 'Depends on frequently changing fields',
+                            fragility: 'Hardcoded values or risky constructs',
+                            usage: 'How often it appears in UI & reports'
+                        };
+
+                        let dnaHtml = `<table style="border-collapse: collapse; width: 100%;">`;
+
+                        for (let metric in dnaMetrics) {
+                            let metricLabel = metric
+                                .replace(/([a-z])([A-Z])/g, '$1 $2')
+                                .replace(/^./, str => str.toUpperCase());
+
+                            let metricValue = dnaMetrics[metric];
+                            let legend = dnaLegendMap[metric] || '';
+                            dnaHtml += `
+              <tr>
+                <td style="padding: 4px; font-weight: bold; background: #f5f5f5;">${metricLabel}</td>
+                <td style="padding: 4px;">${metricValue}<br />
+                <span style="font-size: 0.75rem; color: #888;">${legend}</span></td>
+              </tr>`;
+                        }
+
+                        dnaHtml += `</table>`;
+                        value = dnaHtml;
+                    }
+
                     tableHtml += `
       <tr>
         <td style="font-weight:bold; background:#fafafa;">${displayKey}</td>
@@ -202,9 +235,6 @@ export default class FormulaRiskAnalyzer extends LightningElement {
       </tr>`;
                 }
             }
-
-
-
             tableHtml += `</tbody></table>`;
 
             sendForecastEmail({
@@ -275,6 +305,7 @@ export default class FormulaRiskAnalyzer extends LightningElement {
                 riskLevelIcon: this.getRiskIcon(row.riskLevel)
             }));
 
+
             this.formulaComparisonList = data
                 .filter(row => row.originalFormula && row.optimizedFormula)
                 .map((row, index) => ({
@@ -310,6 +341,8 @@ export default class FormulaRiskAnalyzer extends LightningElement {
             await this.loadChartLibrary();
             this.renderChart();
             this.renderGraph();
+            this.renderDnaChart();
+
 
         } catch (error) {
             console.error('Error loading formula fields:', error);
@@ -317,6 +350,105 @@ export default class FormulaRiskAnalyzer extends LightningElement {
             this.isLoading = false;
         }
     }
+
+    @track showLegend = false;
+
+    get legendToggleLabel() {
+        return this.showLegend ? 'Hide DNA Metric Legend' : 'Show DNA Metric Legend';
+    }
+
+    toggleLegend() {
+        this.showLegend = !this.showLegend;
+    }
+
+
+    renderDnaChart() {
+        const container = this.template.querySelector('.dna-chart');
+        if (!container || !window.echarts) return;
+
+        if (this.dnaChart) {
+            this.dnaChart.dispose();
+        }
+
+        const chart = window.echarts.init(container);
+        this.dnaChart = chart;
+
+        const metrics = ['complexity', 'chainDepth', 'blastRadius', 'volatility', 'fragility', 'usage'];
+        const fields = this.rows.map(f => f.fieldName);
+
+        const seriesData = [];
+        this.rows.forEach((row, rowIndex) => {
+            if (!row.dna) return;
+            metrics.forEach((metric, colIndex) => {
+                seriesData.push({
+                    value: [colIndex, rowIndex, row.dna[metric]]
+                });
+            });
+        });
+
+        const getHeatColor = (val) => {
+            switch (val) {
+                case 'high':
+                    return '#e74c3c';
+                case 'medium':
+                    return '#f39c12';
+                case 'low':
+                    return '#2ecc71';
+                default:
+                    return '#bdc3c7';
+            }
+        };
+
+        chart.setOption({
+            tooltip: {
+                formatter: function(params) {
+                    const [col, row, value] = params.data.value;
+                    return `${fields[row]}<br/>${metrics[col]}: ${value}`;
+                }
+            },
+            grid: {
+                left: 20,
+                right: 20,
+                top: 40,
+                bottom: 40,
+                containLabel: true
+            },
+            xAxis: {
+                type: 'category',
+                data: metrics,
+                axisLabel: {
+                    rotate: 90
+                }
+            },
+            yAxis: {
+                type: 'category',
+                data: fields
+            },
+            series: [{
+                type: 'custom',
+                renderItem: (params, api) => {
+                    const value = api.value(2);
+                    const color = getHeatColor(value);
+                    const [x, y] = api.coord([api.value(0), api.value(1)]);
+                    const [width, height] = api.size([1, 1]);
+                    return {
+                        type: 'rect',
+                        shape: {
+                            x: x - width / 2,
+                            y: y - height / 2,
+                            width,
+                            height
+                        },
+                        style: {
+                            fill: color
+                        }
+                    };
+                },
+                data: seriesData
+            }]
+        });
+    }
+
 
     async loadChartLibrary() {
         if (!this.chartJsInitialized) {
