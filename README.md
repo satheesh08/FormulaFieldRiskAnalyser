@@ -271,17 +271,19 @@ By following these steps, you can configure Salesforce to communicate with the O
 
 
 You can see the forecast by clicking on the chart icon,plus you can send email to all admins regarding the complexity
+<img width="1354" height="638" alt="image" src="https://github.com/user-attachments/assets/1cfac77d-78d8-47b3-96ac-c7221523d3d1" />
 
-<img width="1349" height="637" alt="image" src="https://github.com/user-attachments/assets/fd9cb710-d94f-4e22-b27d-d8aeaec6f456" />
 
 Attaching a sample email in this branch.
 [FormulaSniffR Forecast & Summary - Inefficient_Formula__c (PDF)](https://github.com/satheesh08/FormulaFieldRiskAnalyser/blob/3871b71b2613597ffd006b81ddaa8fac0e1b7623/Gmail%20-%20FormulaSniffR%20Forecast%20%26%20Summary_%20Inefficient_Formula__c/FormulaSniffR_Forecast%20_Summary_Inefficient_Formula__c.pdf)
 
 
 
-You can replace the formula with the optimised one by clicking on the paste icon.
 
-<img width="1352" height="644" alt="image" src="https://github.com/user-attachments/assets/1426f010-2e49-4fa5-97ae-4b1a02641511" />
+
+You can replace the formula with the optimised one by clicking on the paste icon.
+<img width="1352" height="645" alt="image" src="https://github.com/user-attachments/assets/ec791629-09a6-4785-8d16-88d740792b61" />
+
 
 ## 📅 Salesforce Compatibility
 
