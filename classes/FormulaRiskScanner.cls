@@ -1,11 +1,19 @@
 public with sharing class FormulaRiskScanner {
-    public class FormulaFieldTimeResult {
-        @AuraEnabled public String fieldName;
-        @AuraEnabled public Integer cpuTimeMs;
-        @AuraEnabled public Integer wallTimeMs;
-        @AuraEnabled public Integer recordCount;
-        @AuraEnabled public Integer totalRecords;
+    
+    public class FormulaMetric {
+        @AuraEnabled public String complexity;
+        @AuraEnabled public String chainDepth;
+        @AuraEnabled public String blastRadius;
+        @AuraEnabled public String volatility;
+        @AuraEnabled public String fragility;
+        @AuraEnabled public String usage;
     }
+    
+    public class FormulaFieldDNA {
+        @AuraEnabled public String name;
+        @AuraEnabled public FormulaMetric metrics;
+    }
+    
     public class SObjectInfo implements Comparable {
         @AuraEnabled public String label;
         @AuraEnabled public String apiName;
@@ -18,6 +26,7 @@ public with sharing class FormulaRiskScanner {
             return this.label.toLowerCase().compareTo(o.label.toLowerCase());
         }
     }
+    
     @AuraEnabled(cacheable=true)
     public static List<SObjectInfo> getAllSObjectNames() {
         List<SObjectInfo> results = new List<SObjectInfo>();
@@ -43,6 +52,7 @@ public with sharing class FormulaRiskScanner {
         results.sort();
         return results;
     }
+    
     public class FormulaInfo {
         @AuraEnabled public String objectName;
         @AuraEnabled public String fieldName;
@@ -61,15 +71,14 @@ public with sharing class FormulaRiskScanner {
         @AuraEnabled public String deps;
         @AuraEnabled public Boolean isNonDeterministic;
         @AuraEnabled public String forecastScore;
-        @AuraEnabled public Integer cpuTimeMs;
-        @AuraEnabled public Integer wallTimeMs;
-        @AuraEnabled public Integer recordCount;
-        @AuraEnabled public Integer totalRecords;
+        @AuraEnabled public FormulaMetric dna;
+        
         public FormulaInfo(
             String o, String f, Integer d, Integer c, Integer h, String r,
             Boolean flag, Boolean tooLong, String rt, String lb, Integer score,
             String redFlags, String ogFx, String optFx, String d2,
-            Integer cpuMs, Integer recordCountVal, Integer totalRec,Integer wallMs,Boolean nonDet, String frScore
+            Boolean nonDet, String frScore,
+            FormulaMetric dnaMetric
         ) {
             objectName = o;
             fieldName = f;
@@ -86,14 +95,12 @@ public with sharing class FormulaRiskScanner {
             originalFormula = ogFx;
             optimizedFormula = optFx;
             deps = d2;
-            wallTimeMs = wallMs;
-            cpuTimeMs = cpuMs;
-            recordCount = recordCountVal;
-            totalRecords = totalRec;
-            isNonDeterministic=nonDet;
-            forecastScore=frScore;
+            isNonDeterministic = nonDet;
+            forecastScore = frScore;
+            dna = dnaMetric;
         }
     }
+    
     @AuraEnabled(cacheable=true)
     public static List<FormulaInfo> getFormulaFields(String objectName) {
         List<FormulaInfo> results = new List<FormulaInfo>();
@@ -125,7 +132,10 @@ public with sharing class FormulaRiskScanner {
             }
             Map<String, Object> objectRecord = (Map<String, Object>) objectRecords[0];
             String durableId = (String) objectRecord.get('DurableId'); 
+            List<FormulaFieldDNA> dnaResult = new List<FormulaFieldDNA>();
+            
             for (String fieldName : formulaFieldNames) {
+                FormulaFieldDNA row = new FormulaFieldDNA();
                 String fieldQuery = 'SELECT Id, Metadata, DeveloperName FROM CustomField WHERE DeveloperName = \'' + fieldName + '\' AND TableEnumOrId = \'' + durableId + '\'';
                 String toolingEndpoint = 'callout:ToolingAPI/services/data/v59.0/tooling/query/?q=' + EncodingUtil.urlEncode(fieldQuery, 'UTF-8');
                 HttpRequest req = new HttpRequest();
@@ -174,12 +184,16 @@ public with sharing class FormulaRiskScanner {
                             String dependencies = getMetadataDependencies(fieldId,fieldName);
                             dependencies = getListViewsUsingField(objectName,devname,dependencies);
                             String forecastScore = forecastFormulaScore(formula, objectName, devname,score);
-                            List<FormulaFieldTimeResult> result = FormulaRiskScanner.getFormulaEvaluationTimes(objectName, devname);
-                            FormulaFieldTimeResult benchmark = result[0];
-                            Integer cpuTime = benchmark.cpuTimeMs;
-                            Integer wallTime = benchmark.wallTimeMs;
-                            Integer recordsTested = benchmark.recordCount;
-                            Integer totalAvailable = benchmark.totalRecords;
+                            FormulaMetric m = new FormulaMetric();
+                            m.complexity = estimateComplexity(formula);
+                            m.chainDepth = estimateChainDepth(formula);
+                            m.blastRadius = estimateBlastRadius(dependencies);
+                            m.volatility = estimateVolatility(formula);
+                            m.fragility = estimateFragility(formula);
+                            m.usage = estimateUsage(dependencies);
+                            row.metrics = m;
+                            dnaResult.add(row);
+                            
                             if (!isCustomUnmanagedField(devname)) {
                                 System.debug('Skipping update: Not a custom unmanaged field => ' + devname);
                             } else {
@@ -188,7 +202,7 @@ public with sharing class FormulaRiskScanner {
                                     risk, usesSpecialFields, isTooLong, returnType, label, score,
                                     String.join(redFlags, '; '),
                                     finalFormula,
-                                    finalOptimizedFormula,dependencies,cpuTime,recordsTested,totalAvailable,wallTime,isNonDeterministic,forecastScore
+                                    finalOptimizedFormula,dependencies,isNonDeterministic,forecastScore,row.metrics
                                 ));
                             }
                         }
@@ -202,6 +216,7 @@ public with sharing class FormulaRiskScanner {
         }
         return results;
     }
+    
     private static final List<String> NON_DETERMINISTIC_PATTERNS = new List<String>{
         '(?i)\\bNOW\\s*\\(',
             '(?i)\\bTODAY\\s*\\(',
@@ -245,6 +260,7 @@ public with sharing class FormulaRiskScanner {
                     }
                     return false;
                 }
+    
     private static Integer countDotDepth(String formula) {
         Set<String> knownFunctions = new Set<String>{
             'AND', 'CASE', 'IF', 'NOT', 'OR', 'BLANKVALUE', 'NULLVALUE',
@@ -283,6 +299,7 @@ public with sharing class FormulaRiskScanner {
         }
         return maxDepth;
     }
+    
     private static Integer countMaxCrossObjectHops(String formula) {
         Pattern p = Pattern.compile('\\b(?:[a-zA-Z_][a-zA-Z0-9_]*__r?|[a-zA-Z_][a-zA-Z0-9_]*)\\.(?:[a-zA-Z_][a-zA-Z0-9_]*)(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*\\b');
         Matcher m = p.matcher(formula);
@@ -309,10 +326,12 @@ public with sharing class FormulaRiskScanner {
         }
         return count;
     }
+    
     private static Boolean containsRecordTypeOrUser(String formula) {
         String upperFormula = formula.toUpperCase();
         return upperFormula.contains('$RECORDTYPE') || upperFormula.contains('$USER');
     }
+    
     private static Boolean hasUnbalancedParentheses(String formula) {
         Integer balance = 0;
         for (Integer i = 0; i < formula.length(); i++) {
@@ -323,11 +342,13 @@ public with sharing class FormulaRiskScanner {
         }
         return balance != 0;
     }
+    
     private static String calculateRisk(Integer depth, Integer crossObj, Integer heavyFuncCount, Boolean tooLong) {
         if (depth >= 6 || crossObj >= 3 || heavyFuncCount >= 2 || tooLong) return 'High';
         if (depth >= 3 || crossObj >= 2 || heavyFuncCount >= 1) return 'Medium';
         return 'Low';
     }
+    
     @AuraEnabled(cacheable=true)
     public static String optimizeFormula(String formula) {
         HttpRequest req = new HttpRequest();
@@ -367,6 +388,7 @@ public with sharing class FormulaRiskScanner {
             return 'Error optimizing formula: ' + res.getBody();
         }
     }
+    
     @AuraEnabled(cacheable=true)
     public static String forecastFormulaScore(String formula, String objectName, String fieldName, Integer nowScore) {
         HttpRequest req = new HttpRequest();
@@ -486,6 +508,7 @@ public with sharing class FormulaRiskScanner {
         // So we allow only fields that match: Field__c (no double __ before __c)
         return fieldName.endsWith('__c') && !Pattern.matches('.*__.+__c', fieldName);
     }
+    
     public static String getMetadataDependencies(String fieldId, String fieldDeveloperName) {
         try {
             String depQuery = 'SELECT MetadataComponentId, MetadataComponentName, MetadataComponentType ' +
@@ -517,6 +540,7 @@ public with sharing class FormulaRiskScanner {
             return 'Exception occurred while checking dependencies: ' + ex.getMessage();
         }
     }
+    
     public static String getListViewsUsingField(String objectApiName, String formulaField,String summary) {
         Map<String, String> developerNameToLabel = new Map<String, String>();
         List<String> listViewDeveloperNames = new List<String>();
@@ -599,43 +623,6 @@ public with sharing class FormulaRiskScanner {
             collectColumns(child, out);
         }
     }  
-    public static List<FormulaFieldTimeResult> getFormulaEvaluationTimes(String objectApiName, String fieldName) {
-        final Integer sampleSize = 4000;
-        List<FormulaFieldTimeResult> resultList = new List<FormulaFieldTimeResult>();
-        if (String.isBlank(objectApiName) || String.isBlank(fieldName)) {
-            return resultList; 
-        }
-        Integer totalRecords = (Integer) Database.countQuery('SELECT COUNT() FROM ' + objectApiName);
-        String baseQuery = 'SELECT Id FROM ' + objectApiName + ' LIMIT ' + sampleSize;
-        List<SObject> baseRecords = Database.query(baseQuery);
-        if (baseRecords.isEmpty()) return resultList;
-        Set<Id> recordIds = new Map<Id, SObject>(baseRecords).keySet();
-        try {
-            String query = 'SELECT Id, ' + fieldName + ' FROM ' + objectApiName + ' WHERE Id IN :recordIds';
-            Long cpuStart = Limits.getCpuTime();
-            Long wallStart = System.currentTimeMillis();
-            List<SObject> records = Database.query(query);
-            for (SObject s : records) {
-                Object val = s.get(fieldName);
-                if (val != null) {
-                    String dummy = val.toString().trim().toLowerCase(); // force full eval
-                }
-            }
-            Long cpuEnd = Limits.getCpuTime();
-            Long wallEnd = System.currentTimeMillis();
-            Long wallTime = wallEnd - wallStart;
-            Long cpuTime = cpuEnd - cpuStart;
-            FormulaFieldTimeResult res = new FormulaFieldTimeResult();
-            res.fieldName = fieldName;
-            res.cpuTimeMs = (Integer)cpuTime;
-            res.wallTimeMs = (Integer)wallTime;
-            res.recordCount = records.size();
-            res.totalRecords = totalRecords;
-            resultList.add(res);
-        } catch (Exception e) {
-        }
-        return resultList;
-    }
     
     @AuraEnabled(cacheable=true)
     public static void sendForecastEmail(String chartImage, String formulaLabel, String recordSummaryHtml) {
@@ -674,5 +661,124 @@ public with sharing class FormulaRiskScanner {
         Messaging.sendEmail(new List<Messaging.SingleEmailMessage>{ email });
     }
     
+    public static String estimateFragility(String formula) {
+        if (String.isBlank(formula)) return 'unknown';
+        
+        formula = formula.toLowerCase();
+        
+        Integer fragilityScore = 0;
+        
+        if (Pattern.matches('.*[\"\\\']\\s*\\w+\\s*[\"\\\'].*', formula)) fragilityScore++;
+        
+        if (Pattern.matches('.*[^a-zA-Z](\\d{3,})[^a-zA-Z]?.*', formula)) fragilityScore++;
+        
+        if (splitIgnoreCase(formula,'if\\(').size() > 3) fragilityScore++;
+        if (splitIgnoreCase(formula,'case\\(').size() > 2) fragilityScore++;
+        
+        if (!formula.contains('isblank') && !formula.contains('nullvalue')) fragilityScore++;
+        
+        if (formula.contains('left(') || formula.contains('mid(') || formula.contains('find(')) fragilityScore++;
+        
+        Pattern idPattern = Pattern.compile('[\'\\"]([a-zA-Z0-9]{15,18})[\'\\"]');
+        Matcher idMatcher = idPattern.matcher(formula);
+        if (idMatcher.find()) {
+            String match = idMatcher.group(1);
+            if (String.isNotBlank(match) && Pattern.matches('.*[a-zA-Z].*', match)) {
+                fragilityScore++;
+            }
+        }
+        
+        if (fragilityScore >= 4) return 'high';
+        if (fragilityScore >= 2) return 'medium';
+        return 'low';
+    }
+    
+    public static String estimateVolatility(String formula) {
+        if (String.isBlank(formula)) return 'unknown';
+        
+        formula = formula.toLowerCase();
+        Integer volatilityScore = 0;
+        
+        if (formula.contains('now()') || formula.contains('today()') || formula.contains('year(')) volatilityScore++;
+        
+        if (formula.contains('today() -') || formula.contains('now() -')) volatilityScore++;
+        
+        if (formula.contains('mod(') || formula.contains('rand(') || formula.contains('round(')) volatilityScore++;
+        
+        if (formula.contains('status') || formula.contains('stage') || formula.contains('priority')) volatilityScore++;
+        if (formula.contains('lastmodified') || formula.contains('ownerid') || formula.contains('lastactivity')) volatilityScore++;
+        
+        if (formula.contains('createdby') || formula.contains('lastmodifiedby')) volatilityScore++;
+        
+        if (volatilityScore >= 3) return 'high';
+        if (volatilityScore == 2) return 'medium';
+        return 'low';
+    }
+    
+    private static String estimateComplexity(String formula) {
+        try {
+            Integer length = formula.length();
+            Integer funcCount = formula.split('\\(').size();
+            
+            
+            if (length > 1000 || funcCount > 10) return 'high';
+            if (length > 400 || funcCount > 5) return 'medium';
+            return 'low';
+        } catch (Exception e) {
+            return 'unknown';
+        }
+    }
+    
+    private static String estimateBlastRadius(String dependencyText) {
+        try {
+            Integer impactScore = 0;
+            if (dependencyText.contains('ApexClass')) impactScore += 5;
+            if (dependencyText.contains('ApexTrigger')) impactScore += 5;
+            if (dependencyText.contains('Flow')) impactScore += 4;
+            if (dependencyText.contains('Process')) impactScore += 3;
+            if (dependencyText.contains('Validation')) impactScore += 3;
+            if (dependencyText.contains('Layout')) impactScore += 1;
+            
+            if (impactScore >= 10) return 'high';
+            if (impactScore >= 4) return 'medium';
+            return 'low';
+        } catch (Exception e) {
+            return 'unknown';
+        }
+    }
+    
+    private static String estimateChainDepth(String formula) {
+        try {
+            Integer count = 0;
+            Pattern fieldPattern = Pattern.compile('[a-zA-Z0-9_]+__c');
+            Matcher matcher = fieldPattern.matcher(formula);
+            while (matcher.find()) {
+                count++;
+            }
+            if (count > 10) return 'high';
+            if (count > 3) return 'medium';
+            return 'low';
+        } catch (Exception e) {
+            return 'unknown';
+        }
+    }
+    
+    private static String estimateUsage(String dependencyText) {
+        try {
+            Integer usageCount = 0;
+            usageCount += String.isNotBlank(dependencyText) ? dependencyText.split('\n').size() : 0;
+            
+            if (usageCount > 10) return 'high';
+            if (usageCount > 3) return 'medium';
+            return 'low';
+        } catch (Exception e) {
+            return 'unknown';
+        }
+    }
+    
+    
+    public static List<String> splitIgnoreCase(String input, String delimiterRegex) {
+        return input == null ? new List<String>() : input.toLowerCase().split(delimiterRegex, 0);
+    }
     
 }
