@@ -275,7 +275,7 @@ You can see the forecast by clicking on the chart icon,plus you can send email t
 <img width="1349" height="637" alt="image" src="https://github.com/user-attachments/assets/fd9cb710-d94f-4e22-b27d-d8aeaec6f456" />
 
 Attaching a sample email in this branch.
-[FormulaSniffR Forecast & Summary - Inefficient_Formula__c (PDF)](https://github.com/satheesh08/FormulaFieldRiskAnalyser/blob/cd943139b7351621160e4b4467a64941653e17b0/Gmail%20-%20FormulaSniffR%20Forecast%20%26%20Summary_%20Inefficient_Formula__c/Gmail%20-%20FormulaSniffR%20Forecast%20%26%20Summary_%20Inefficient_Formula__c.pdf)
+[FormulaSniffR Forecast & Summary - Inefficient_Formula__c (PDF)](https://github.com/satheesh08/FormulaFieldRiskAnalyser/blob/3871b71b2613597ffd006b81ddaa8fac0e1b7623/Gmail%20-%20FormulaSniffR%20Forecast%20%26%20Summary_%20Inefficient_Formula__c/FormulaSniffR_Forecast%20_Summary_Inefficient_Formula__c.pdf)
 
 
 
