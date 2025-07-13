@@ -5,9 +5,55 @@
   padding: 1rem;
 }
 
+.side-by-side-charts {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 1rem;
+  width: 100%;
+}
+
+.chart-box {
+  flex: 1 1 50%;
+  min-width: 0;
+  height: 42vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dna-chart,
 .sankey-chart {
-  background-color: #000;
+  flex: 1;
+  width: 100%;
+  height: 70vh;
   border-radius: 8px;
-  padding: 8px;
-  height: 500px;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  overflow: hidden;
+}
+
+.dna-chart {
+  background-color: #f9f9f9;
+}
+
+.sankey-chart {
+  background-color: #111;
+}
+
+.legend-overlay {
+  position: absolute;
+  top: 3.2rem;
+  right: 0rem;
+  width: 315px;
+  z-index: 1000;
+  background-color: #fff;
+  border: 1px solid #d8dde6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 1rem;
+  font-size: 0.85rem;
+  max-height: 85vh;
+  overflow-y: auto;
 }
