@@ -352,47 +352,63 @@ public with sharing class FormulaRiskScanner {
     @AuraEnabled(cacheable=true)
     public static String optimizeFormula(String formula) {
         HttpRequest req = new HttpRequest();
+        
+        // Protect PROD
         String domain = System.Url.getOrgDomainUrl().getHost().toLowerCase();
         Boolean isSandbox = domain.contains('sandbox') || domain.contains('dev-ed');
         if (!isSandbox) {
             return 'Do not touch PROD';
         }
-        req.setEndpoint('callout:Open_AI_API_Named_Cred/v1/chat/completions');
+        
+        req.setEndpoint('callout:Gemini_2_5_Flash_NC/v1beta/models/gemini-2.0-flash:generateContent');
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
-        String prompt = 'You are a Salesforce formula field optimizer. Your goal is to simplify and optimize Salesforce formulas wherever possible. You should preserve the formulas logic and output, but you are allowed to safely restructure or flatten logic for clarity and performance. Maintain correct Salesforce syntax and preserve field references, but you may refactor nested IFs, remove redundant conditions, and consolidate logic where behavior remains equivalent. Return the optimized formula as a plain text string with no explanation, no markdown, and no formatting.';
-        String requestBody = System.JSON.serialize(new Map<String, Object>{
-            'model' => 'gpt-4o-mini',
-                'temperature' => 0.2,
-                'messages' => new List<Map<String, String>>{
-                    new Map<String, String>{
-                        'role' => 'system',
-                            'content' => prompt
-                            },
-                                new Map<String, String>{
-                                    'role' => 'user',
-                                        'content' => formula
-                                        }
-                }
-        });
-        req.setBody(requestBody);        
+        
+        String prompt = 'You are a Salesforce formula field optimizer. Your goal is to simplify and optimize Salesforce formulas wherever possible. You should preserve the formula’s logic and output, but you are allowed to safely restructure or flatten logic for clarity and performance. Maintain correct Salesforce syntax and preserve field references, but you may refactor nested IFs, remove redundant conditions, and consolidate logic where behavior remains equivalent. Return the optimized formula as a plain text string with no explanation, no markdown, and no formatting.';
+        
+        // Gemini format
+        Map<String, Object> partSystem = new Map<String, Object>{ 'text' => prompt };
+            Map<String, Object> partUser = new Map<String, Object>{ 'text' => formula };
+                
+                List<Object> contents = new List<Object>{
+                    new Map<String, Object>{ 'role' => 'user', 'parts' => new List<Object>{ partSystem } },
+                        new Map<String, Object>{ 'role' => 'user', 'parts' => new List<Object>{ partUser } }
+                };
+                    
+                    Map<String, Object> finalPayload = new Map<String, Object>{
+                        'contents' => contents
+                            };
+                                
+                                String jsonBody = JSON.serialize(finalPayload);
+        req.setBody(jsonBody);
+        
         Http http = new Http();
         HttpResponse res = http.send(req);
-        String optimizedFormula = '';
+        
         if (res.getStatusCode() == 200) {
-            Map<String, Object> parsedResponse = (Map<String, Object>)System.JSON.deserializeUntyped(res.getBody());
-            List<Object> choicesList = (List<Object>) parsedResponse.get('choices'); 
-            optimizedFormula = (String) ((Map<String, Object>) ((Map<String, Object>) choicesList.get(0)).get('message')).get('content');
-            return optimizedFormula;
+            Map<String, Object> parsed = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+            List<Object> candidates = (List<Object>) parsed.get('candidates');
+            if (!candidates.isEmpty()) {
+                Map<String, Object> candidate = (Map<String, Object>) candidates.get(0);
+                Map<String, Object> content = (Map<String, Object>) candidate.get('content');
+                List<Object> parts = (List<Object>) content.get('parts');
+                if (!parts.isEmpty()) {
+                    Map<String, Object> part = (Map<String, Object>) parts.get(0);
+                    String text = (String) part.get('text');
+                    return text;
+                }
+            }
+            return 'No valid response from Gemini.';
         } else {
             return 'Error optimizing formula: ' + res.getBody();
         }
     }
     
+    
     @AuraEnabled(cacheable=true)
     public static String forecastFormulaScore(String formula, String objectName, String fieldName, Integer nowScore) {
         HttpRequest req = new HttpRequest();
-        req.setEndpoint('callout:Open_AI_API_Named_Cred/v1/chat/completions');
+        req.setEndpoint('callout:Gemini_2_5_Flash_NC/v1beta/models/gemini-2.0-flash:generateContent');
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
         
@@ -416,26 +432,39 @@ public with sharing class FormulaRiskScanner {
             'Do not add any explanation or comments.\n\n' +
             'Formula for context (no need to rescore):\n' + formula;
         
-        String requestBody = JSON.serialize(new Map<String, Object>{
-            'model' => 'gpt-4o-mini',
-                'temperature' => 0.2,
-                'messages' => new List<Map<String, String>>{
-                    new Map<String, String>{ 'role' => 'system', 'content' => prompt },
-                        new Map<String, String>{ 'role' => 'user', 'content' => 'Formula from ' + objectName + '.' + fieldName }
-                }
-        });
+        Map<String, Object> part = new Map<String, Object>{
+            'text' => prompt
+                };
+                    List<Object> parts = new List<Object>{ part };
+                        Map<String, Object> content = new Map<String, Object>{
+                            'parts' => parts
+                                };
+                                    List<Object> contents = new List<Object>{ content };
+                                        Map<String, Object> finalPayload = new Map<String, Object>{
+                                            'contents' => contents
+                                                };
+                                                    String jsonBody = JSON.serialize(finalPayload);
         
-        req.setBody(requestBody);
+        req.setBody(jsonBody);
         Http http = new Http();
         HttpResponse res = http.send(req);
         
         if (res.getStatusCode() == 200) {
-            Map<String, Object> parsedResponse = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
-            List<Object> choicesList = (List<Object>) parsedResponse.get('choices');
-            String forecast = (String) ((Map<String, Object>) ((Map<String, Object>) choicesList[0]).get('message')).get('content');
-            return forecast;
+            Map<String, Object> parsed = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+            List<Object> candidates = (List<Object>) parsed.get('candidates');
+            if (!candidates.isEmpty()) {
+                Map<String, Object> candidate = (Map<String, Object>) candidates.get(0);
+                Map<String, Object> content2 = (Map<String, Object>) candidate.get('content');
+                List<Object> parts2 = (List<Object>) content2.get('parts');
+                if (!parts2.isEmpty()) {
+                    Map<String, Object> part2 = (Map<String, Object>) parts2.get(0);
+                    String text = (String) part2.get('text');
+                    return text;
+                }
+            }
+            return 'No valid response from Gemini.';
         } else {
-            return 'Forecast error: ' + res.getBody();
+            return 'Error forecasting formula complexity: ' + res.getBody();
         }
     }
     
