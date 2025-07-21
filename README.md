@@ -124,11 +124,11 @@ To use the OpenAI API, you'll need to obtain an API key. Follow these steps to g
 By following these steps, you'll be able to obtain and securely use your OpenAI API key for accessing the OpenAI services.
 
 ## Steps to add your API key to the Named Credentials
-![Screenshot (41)](https://github.com/user-attachments/assets/590b55b0-a25f-42de-b862-f8d7a268e772)
+<img width="1350" height="640" alt="image" src="https://github.com/user-attachments/assets/3f07d8c1-69eb-4c90-8bfe-256b3a754b4a" />
 
-![Screenshot (110)](https://github.com/user-attachments/assets/e185405f-bc1c-4575-ab46-52b2a2b05928)
+<img width="1361" height="604" alt="image" src="https://github.com/user-attachments/assets/3fe56855-8af6-4b5e-a71e-5b9dd13f923f" />
 
-![Screenshot (111)](https://github.com/user-attachments/assets/6c2afdcf-2da1-4acd-8994-3af95983549f)
+<img width="1364" height="603" alt="image" src="https://github.com/user-attachments/assets/b3ad9ac8-5b55-494b-afdd-402cec7eb0c7" />
 
 
 
