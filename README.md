@@ -21,7 +21,7 @@ That’s where This Salesforce Lightning Web Component (LWC) helps developers an
 | 📈 **CPU Score**                  | A numerical score derived from multiple factors to quantify complexity/risk.                                            |
 | 🚩 **Red Flags**                  | Text field highlighting specific issues found, e.g., “Excessive nesting”, “Unbalanced parentheses”, etc.                |
 
-It uses the **Tooling API** securely via a **Named Credential**, removing the need for manual token management.Plus it is integrated with OpenAI and so you will get the Optimised version for your formulas.
+It uses the **Tooling API** securely via a **Named Credential**, removing the need for manual token management.Plus it is integrated with Gemini AI and so you will get the Optimised version for your formulas.
 
 ---
 
@@ -83,45 +83,28 @@ this tool helps surface these risks — and now, thanks to AI, even helps you so
 <img width="1181" height="346" alt="image" src="https://github.com/user-attachments/assets/ee2c174d-9d4f-4b0e-821c-45a660cedcaa" />
 
 
-# How to Obtain an OpenAI API Key
+# How to Obtain an Gemini API Key
 
-To use the OpenAI API, you'll need to obtain an API key. Follow these steps to get your API key from OpenAI.
+To use the Gemini API, you'll need to obtain an API key. Follow these steps to get your API key from Google.
 
-## Steps to Get Your OpenAI API Key
+## Steps to Get Your Gemini API Key
+🔹  Step 1: Go to Google AI Studio [Google AI Studio](https://aistudio.google.com/app)
+   Log in with your Google/Gmail account
+🔹  Step 2: Get Your API Key
+   Click your Google account icon (top-right corner)
+   Choose “Get API Key”
+   Click “Create API Key”
+   Copy this key — you’ll use it as the x-goog-api-key header for calling Gemini APIs.
 
-1. **Sign Up for an OpenAI Account:**
-   - Visit the [OpenAI website](https://www.openai.com/).
-   - Click on **Sign Up** or **Get Started** to create a new account.
-   - Follow the prompts to complete the registration process.
-
-2. **Log In to Your OpenAI Account:**
-   - If you already have an account, click on **Log In** on the OpenAI website.
-   - Enter your credentials and access your account dashboard.
-
-3. **Navigate to the API Keys Section:**
-   - Once logged in, go to the [OpenAI API Dashboard](https://platform.openai.com/account/api-keys).
-   - You may be required to verify your email address or complete other security checks before accessing the API keys.
-
-4. **Generate a New API Key:**
-   - In the API Keys section, click on **Create New Key** or a similar option.
-   - Provide a name or label for the key if prompted (e.g., "My Salesforce Integration").
-   - Click **Generate** or **Create** to generate your API key.
-
-5. **Copy Your API Key:**
-   - Once generated, your new API key will be displayed on the screen.
-   - Click the **Copy** button or manually copy the key to your clipboard.
-   - Store this key securely, as it provides access to the OpenAI API.
-
-6. **Use Your API Key:**
-   - You can now use the API key in your applications or integrations to authenticate requests to the OpenAI API.
+You can use my API key since it's free, but I recommend generating your own in case it becomes paid later—you’ll then have full control.
 
 ## Security Tips
 
 - **Keep Your API Key Confidential:** Do not share your API key publicly or include it in client-side code.
-- **Regenerate Keys if Compromised:** If you believe your API key has been compromised, regenerate it immediately from the OpenAI dashboard.
-- **Monitor Usage:** Regularly check your OpenAI usage to ensure there are no unexpected activities.
+- **Regenerate Keys if Compromised:** If you believe your API key has been compromised, regenerate it immediately from the Gemini dashboard.
+- **Monitor Usage:** Regularly check your Gemini usage to ensure there are no unexpected activities.
 
-By following these steps, you'll be able to obtain and securely use your OpenAI API key for accessing the OpenAI services.
+By following these steps, you'll be able to obtain and securely use your Gemini API key for accessing the Gemini services.
 
 ## Steps to add your API key to the Named Credentials
 <img width="1350" height="640" alt="image" src="https://github.com/user-attachments/assets/3f07d8c1-69eb-4c90-8bfe-256b3a754b4a" />
@@ -132,9 +115,9 @@ By following these steps, you'll be able to obtain and securely use your OpenAI 
 
 
 
-## Adding Remote Site Settings for OpenAI API in Salesforce
+## Adding Remote Site Settings for Gemini API in Salesforce
 
-To configure Salesforce to communicate with the OpenAI API, follow these steps to add a remote site setting.
+To configure Salesforce to communicate with the Gemini API, follow these steps to add a remote site setting.
 
 ## Steps to Add Remote Site Settings
 
@@ -149,10 +132,10 @@ To configure Salesforce to communicate with the OpenAI API, follow these steps t
    - Click the **New Remote Site** button.
 
 4. **Fill in the Remote Site Details:**
-   - **Remote Site Name:** Enter a name for the remote site. Example: `OpenAI_API`.
-   - **Remote Site URL:** Enter `https://api.openai.com`.
+   - **Remote Site Name:** Enter a name for the remote site. Example: `Gemini_2_5_Flash`.
+   - **Remote Site URL:** Enter `https://generativelanguage.googleapis.com/`.
      - Ensure you use `https://` for the secure protocol.
-   - **Description:** Optionally, add a description such as `Remote site for OpenAI API`.
+   - **Description:** Optionally, add a description such as `Remote site for Gemini API`.
 
 5. **Save the Remote Site:**
    - Click the **Save** button to create the remote site setting.
@@ -162,11 +145,11 @@ To configure Salesforce to communicate with the OpenAI API, follow these steps t
 
 ## Additional Tips
 
-- **Security and Access:** Ensure that the remote site setting matches the OpenAI API URL exactly. The protocol (`https://`) and domain must be correct.
-- **Testing Connectivity:** Use an HTTP request tool or write Apex code to test if Salesforce can access the OpenAI API.
+- **Security and Access:** Ensure that the remote site setting matches the Gemini API URL exactly. The protocol (`https://`) and domain must be correct.
+- **Testing Connectivity:** Use an HTTP request tool or write Apex code to test if Salesforce can access the Gemini API.
 - **Apex Integration:** Consider using named credentials for storing authentication securely and simplifying API calls.
 
-By following these steps, you can configure Salesforce to communicate with the OpenAI API. Ensure that the URL and other details are accurate to avoid any issues.
+By following these steps, you can configure Salesforce to communicate with the Gemini API. Ensure that the URL and other details are accurate to avoid any issues.
 
 ### 🔑 STEP 1: Create a Connected App (One-Time Setup)
 
